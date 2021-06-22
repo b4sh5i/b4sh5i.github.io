@@ -23,6 +23,7 @@ $(document).ready(function(){
 <center>
 <font style="font-size: 27px; line-height: 1.1; display: block; font-family: 'Open Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 300; margin: 10px 0 0;">I am a <span id="js-rotating">Hacker, Developer, 100su, ほんもの</span> .</font>
 </center>
+
 {:/}
 
 
