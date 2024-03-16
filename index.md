@@ -1,12 +1,8 @@
 # Profile
-
 - Kanghyun Choi (@ b4sh5i)
 - Email : pwner@kakao.com / kb4sh5i.choi@samsung.com
 
----
-
 # Act
-
 - 17.10 ~ ing : $wag (CTF Team)
 - 18.07 ~ 19.04 : Best of Best 7th vulnerability track (Top 30)
 - 18.07 ~ 19.04 : pwnhub(in BoB)
@@ -19,10 +15,7 @@
 - 23.08 ~ ing : Samsung SDS (보안 엔지니어)
     - 23.08 ~ ing : 통합보안센터 보안점검파트 근무
 
----
-
 # Award
-
 - 17.08 : 1st SCTF Finalist (@ b4sh5i)
 - 17.12 : X-max CTF 1st (@ 박광호 1인팀)
 - 18.02 : 2018 Harekaze CTF 3rd (@ SeoulWesterns)
@@ -46,10 +39,7 @@
 - 22.09 : 2022 사이버공격방어대회 공공부문(예선) 4th (@ Triggering boys)
     - 공공부문 본선 5위 기록
 
----
-
-# Presentation
-
+## Presentation
 - 17.08 : 코딩 실수에서 일어나는 해킹 (in Google Development Group Campus Korea)
 - 18.11 : Enhanced Smart Home Network Security Through Analysis of IoT Hub Vulnerabilities (in POC) @BoB
 - 19.03 : Let's hack the IoT Hub with Pwnhub dudes: IoT Hub Exploitation (in Insomnihack) @BoB
