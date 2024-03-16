@@ -1,4 +1,4 @@
-name = "Who am I."
+name = "researcher"
 license = "GPL-3.0"
 licenselink = "https://github.com/ojroques/hugo-researcher/blob/master/LICENSE"
 description = "A simple monospaced resume theme for Hugo."
