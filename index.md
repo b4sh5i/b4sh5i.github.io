@@ -36,8 +36,7 @@
 - 21.11 : pwn2own 2021 Austin Winner (@Diffense Team)
     - [Cisco RV340 RCE](https://twitter.com/thezdi/status/1456643578281840641)
     - [Western Digital My Cloud Pro Series PR4100 RCE](https://twitter.com/thezdi/status/1456092053264293892)
-- 22.09 : 2022 사이버공격방어대회 공공부문(예선) 4th (@ Triggering boys)
-    - 공공부문 본선 5위 기록
+- 22.09 : 2022 사이버공격방어대회 공공부문(예선/Finalist) 4th (@ Triggering boys)
 
 ## Presentation
 - 17.08 : 코딩 실수에서 일어나는 해킹 (in Google Development Group Campus Korea)
