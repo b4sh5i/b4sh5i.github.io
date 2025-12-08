@@ -52,6 +52,7 @@
         <nav class="tab-nav">
             <button class="tab-btn active" onclick="switchTab('dungeon')">⚔️ 던전</button>
             <button class="tab-btn" onclick="switchTab('inventory')">🎒 인벤토리</button>
+            <button class="tab-btn" onclick="switchTab('consumables')">🧪 소모품</button>
             <button class="tab-btn" onclick="switchTab('boxes')">📦 상자</button>
             <button class="tab-btn" onclick="switchTab('stats')">📊 통계</button>
         </nav>
@@ -63,8 +64,14 @@
                 <p>최고 기록: <span id="max-floor">1</span>층</p>
             </div>
 
+            <!-- 미니맵 (시각적 표시만) -->
+            <div class="minimap-container">
+                <h3>🗺️ 미니맵</h3>
+                <div id="minimap" class="minimap-grid"></div>
+            </div>
+
             <div id="enemy-info" class="enemy-container">
-                <div class="no-enemy">전투 준비 중...</div>
+                <div class="no-enemy">방을 탐험하세요...</div>
             </div>
 
             <div class="battle-log-container">
@@ -73,9 +80,7 @@
             </div>
 
             <div id="battle-actions" class="battle-actions">
-                <button onclick="startBattle()" class="btn-primary btn-large">⚔️ 전투 시작</button>
-                <button onclick="moveToNextFloor()" class="btn-secondary btn-large">➡️ 다음 층</button>
-                <button onclick="showDungeonSelect()" class="btn-secondary btn-large">🔄 재도전</button>
+                <button onclick="moveToNextFloor()" class="btn-primary btn-large">➡️ 다음 층</button>
             </div>
         </section>
 
@@ -99,6 +104,12 @@
 
             <h2>보유 아이템</h2>
             <div id="inventory-list" class="inventory-grid"></div>
+        </section>
+
+        <!-- 소모품 탭 -->
+        <section id="consumables-tab" class="tab-content">
+            <h2>포션 목록</h2>
+            <div id="consumables-list" class="consumables-grid"></div>
         </section>
 
         <!-- 상자 탭 -->
@@ -181,10 +192,44 @@
         </div>
     </div>
 
+    <!-- 우물 모달 -->
+    <div id="well-modal" class="modal">
+        <div class="modal-content">
+            <h2>💧 치유의 우물</h2>
+            <p class="modal-desc">신비로운 우물이 있습니다. 체력을 50% 회복할 수 있습니다.</p>
+            <div class="modal-buttons">
+                <button onclick="useWell()" class="btn-primary">💧 우물 사용</button>
+                <button onclick="closeWellModal()" class="btn-secondary">나가기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 새 게임 확인 모달 -->
+    <div id="new-game-modal" class="modal">
+        <div class="modal-content">
+            <h2>🔄 새 게임</h2>
+            <p class="modal-desc">새 게임을 시작하시겠습니까? 현재 진행 상황이 모두 삭제됩니다.</p>
+            <div class="modal-buttons">
+                <button onclick="confirmNewGame()" class="btn-primary">새 게임 시작</button>
+                <button onclick="closeNewGameModal()" class="btn-secondary">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 사망 화면 -->
+    <div id="death-screen" class="death-screen">
+        <div class="death-overlay"></div>
+        <div class="death-content">
+            <h1 class="death-text">YOU DIED</h1>
+        </div>
+    </div>
+
     <!-- 스크립트 -->
+    <script src="systems/toast.js"></script>
     <script src="data/items.js"></script>
     <script src="systems/gacha.js"></script>
     <script src="systems/save.js"></script>
+    <script src="systems/dungeon-map.js"></script>
     <script src="game.js"></script>
     <script src="ui/ui.js"></script>
     <script>

@@ -6,67 +6,123 @@
  * 전체 UI 업데이트
  */
 function updateUI() {
-    updatePlayerUI();
-    updateDungeonUI();
-    updateInventoryUI();
-    updateBoxesUI();
-    updateStatsUI();
+  updatePlayerUI();
+  updateMinimapUI();
+  updateDungeonUI();
+  updateInventoryUI();
+  updateConsumablesUI();
+  updateBoxesUI();
+  updateStatsUI();
 }
 
 /**
  * 플레이어 정보 UI 업데이트
  */
 function updatePlayerUI() {
-    const stats = calculatePlayerStats();
+  const stats = calculatePlayerStats();
 
-    document.getElementById('player-name').textContent = gameState.player.name;
-    document.getElementById('player-level').textContent = gameState.player.level;
-    document.getElementById('player-hp').textContent = `${gameState.player.currentHp} / ${stats.hp}`;
-    document.getElementById('player-attack').textContent = stats.attack;
-    document.getElementById('player-defense').textContent = stats.defense;
+  document.getElementById('player-name').textContent = gameState.player.name;
+  document.getElementById('player-level').textContent = gameState.player.level;
+  document.getElementById('player-hp').textContent = `${gameState.player.currentHp} / ${stats.hp}`;
+  document.getElementById('player-attack').textContent = stats.attack;
+  document.getElementById('player-defense').textContent = stats.defense;
 
-    // HP 바
-    const hpPercent = (gameState.player.currentHp / stats.hp) * 100;
-    document.getElementById('hp-bar').style.width = `${hpPercent}%`;
+  // HP 바
+  const hpPercent = (gameState.player.currentHp / stats.hp) * 100;
+  document.getElementById('hp-bar').style.width = `${hpPercent}%`;
 
-    // 장착 아이템
-    updateEquippedItems();
+  // 장착 아이템
+  updateEquippedItems();
 }
 
 /**
  * 장착 아이템 UI 업데이트
  */
 function updateEquippedItems() {
-    const slots = ['weapon', 'armor', 'accessory'];
+  const slots = ['weapon', 'armor', 'accessory'];
 
-    slots.forEach(slot => {
-        const item = gameState.player.equipped[slot];
-        const element = document.getElementById(`equipped-${slot}`);
+  slots.forEach(slot => {
+    const item = gameState.player.equipped[slot];
+    const element = document.getElementById(`equipped-${slot}`);
 
-        if (item) {
-            element.innerHTML = `
+    if (item) {
+      element.innerHTML = `
         <div class="equipped-item" style="border-color: ${RARITY_COLORS[item.rarity]}">
           <div class="item-name">${item.name}</div>
           <div class="item-rarity" style="color: ${RARITY_COLORS[item.rarity]}">${RARITY_NAMES[item.rarity]}</div>
           <button onclick="unequipItem('${slot}')" class="btn-small">해제</button>
         </div>
       `;
-        } else {
-            element.innerHTML = `<div class="empty-slot">${TYPE_NAMES[slot]} 없음</div>`;
-        }
-    });
+    } else {
+      element.innerHTML = `<div class="empty-slot">${TYPE_NAMES[slot]} 없음</div>`;
+    }
+  });
+}
+
+/**
+ * 미니맵 UI 업데이트
+ */
+function updateMinimapUI() {
+  const container = document.getElementById('minimap');
+  const map = gameState.dungeon.currentMap;
+
+  if (!map) {
+    container.innerHTML = '<div class="empty-message">맵 정보 없음</div>';
+    return;
+  }
+
+  let html = '';
+  for (let y = 0; y < map.size; y++) {
+    for (let x = 0; x < map.size; x++) {
+      const room = map.grid[y][x];
+      const isCurrent = (x === map.currentX && y === map.currentY);
+      const isCleared = room.cleared;
+      const isAccessible = room.accessible;
+      const isVisited = room.visited;
+      const isBoss = room.enemy && room.enemy.isBoss;
+
+      let roomClass = 'room-cell';
+      if (!isAccessible) roomClass += ' inaccessible';
+      if (isCurrent) roomClass += ' current';
+      if (isCleared) roomClass += ' cleared';
+      if (room.type === ROOM_TYPE.WELL) roomClass += ' well';
+      if (isBoss) roomClass += ' boss';
+
+      // 아이콘 결정
+      let icon;
+      if (!isAccessible) {
+        icon = '⬛';
+      } else if (isBoss) {
+        // 보스는 항상 표시
+        icon = '👑';
+      } else if (!isVisited) {
+        // 방문하지 않은 방은 ?로 표시
+        icon = '❓';
+      } else {
+        // 방문한 방은 실제 아이콘 표시
+        icon = ROOM_ICONS[room.type];
+      }
+
+      html += `<div class="${roomClass}" onclick="enterRoom(${x}, ${y})" title="${isVisited || isBoss ? (TYPE_NAMES[room.type] || room.type) : '미탐험'}">
+                <span class="room-icon">${icon}</span>
+            </div>`;
+    }
+  }
+
+  container.innerHTML = html;
+  container.style.gridTemplateColumns = `repeat(${map.size}, 1fr)`;
 }
 
 /**
  * 던전 UI 업데이트
  */
 function updateDungeonUI() {
-    document.getElementById('current-floor').textContent = gameState.dungeon.currentFloor;
-    document.getElementById('max-floor').textContent = gameState.dungeon.maxFloor;
+  document.getElementById('current-floor').textContent = gameState.dungeon.currentFloor;
+  document.getElementById('max-floor').textContent = gameState.dungeon.maxFloor;
 
-    if (gameState.dungeon.inBattle && gameState.dungeon.currentEnemy) {
-        const enemy = gameState.dungeon.currentEnemy;
-        document.getElementById('enemy-info').innerHTML = `
+  if (gameState.dungeon.inBattle && gameState.dungeon.currentEnemy) {
+    const enemy = gameState.dungeon.currentEnemy;
+    document.getElementById('enemy-info').innerHTML = `
       <div class="enemy-card ${enemy.isBoss ? 'boss' : ''}">
         <div class="enemy-name">${enemy.name}</div>
         <div class="enemy-hp">HP: ${enemy.hp} / ${enemy.maxHp}</div>
@@ -80,28 +136,28 @@ function updateDungeonUI() {
       </div>
     `;
 
-        document.getElementById('battle-actions').style.display = 'none';
-    } else {
-        document.getElementById('enemy-info').innerHTML = '<div class="no-enemy">전투 준비 중...</div>';
-        document.getElementById('battle-actions').style.display = 'block';
-    }
+    document.getElementById('battle-actions').style.display = 'none';
+  } else {
+    document.getElementById('enemy-info').innerHTML = '<div class="no-enemy">전투 준비 중...</div>';
+    document.getElementById('battle-actions').style.display = 'block';
+  }
 }
 
 /**
  * 인벤토리 UI 업데이트
  */
 function updateInventoryUI() {
-    const container = document.getElementById('inventory-list');
+  const container = document.getElementById('inventory-list');
 
-    if (gameState.inventory.length === 0) {
-        container.innerHTML = '<div class="empty-message">아이템이 없습니다</div>';
-        return;
-    }
+  if (gameState.inventory.length === 0) {
+    container.innerHTML = '<div class="empty-message">아이템이 없습니다</div>';
+    return;
+  }
 
-    container.innerHTML = gameState.inventory.map((item, index) => {
-        const isEquipped = Object.values(gameState.player.equipped).some(eq => eq && eq.id === item.id);
+  container.innerHTML = gameState.inventory.map((item, index) => {
+    const isEquipped = Object.values(gameState.player.equipped).some(eq => eq && eq.id === item.id);
 
-        return `
+    return `
       <div class="item-card" style="border-color: ${RARITY_COLORS[item.rarity]}">
         <div class="item-header">
           <span class="item-name">${item.name}</span>
@@ -114,26 +170,53 @@ function updateInventoryUI() {
           ${item.hp > 0 ? `<span>❤️ +${item.hp}</span>` : ''}
         </div>
         ${isEquipped
-                ? '<div class="equipped-badge">장착 중</div>'
-                : `<button onclick="equipItem(${item.id})" class="btn-equip">장착</button>`
-            }
+        ? '<div class="equipped-badge">장착 중</div>'
+        : `<button onclick="equipItem(${item.id})" class="btn-equip">장착</button>`
+      }
       </div>
     `;
-    }).join('');
+  }).join('');
+}
+
+/**
+ * 소모품 UI 업데이트
+ */
+function updateConsumablesUI() {
+  const container = document.getElementById('consumables-list');
+
+  if (!gameState.consumables || gameState.consumables.length === 0) {
+    container.innerHTML = '<div class="empty-message">포션이 없습니다</div>';
+    return;
+  }
+
+  container.innerHTML = gameState.consumables.map((potion, index) => {
+    return `
+      <div class="consumable-card" style="border-color: ${RARITY_COLORS[potion.rarity]}">
+        <div class="consumable-header">
+          <span class="consumable-name">${potion.name}</span>
+          <span class="consumable-rarity" style="color: ${RARITY_COLORS[potion.rarity]}">${RARITY_NAMES[potion.rarity]}</span>
+        </div>
+        <div class="consumable-effect">
+          💚 체력 ${potion.healPercent}% 회복
+        </div>
+        <button onclick="usePotion(${potion.id})" class="btn-use">사용</button>
+      </div>
+    `;
+  }).join('');
 }
 
 /**
  * 상자 목록 UI 업데이트
  */
 function updateBoxesUI() {
-    const container = document.getElementById('boxes-list');
+  const container = document.getElementById('boxes-list');
 
-    if (gameState.boxes.length === 0) {
-        container.innerHTML = '<div class="empty-message">보유 중인 상자가 없습니다</div>';
-        return;
-    }
+  if (gameState.boxes.length === 0) {
+    container.innerHTML = '<div class="empty-message">보유 중인 상자가 없습니다</div>';
+    return;
+  }
 
-    container.innerHTML = gameState.boxes.map((box, index) => `
+  container.innerHTML = gameState.boxes.map((box, index) => `
     <div class="box-card" style="background: linear-gradient(135deg, ${BOX_COLORS[box.grade]}22, ${BOX_COLORS[box.grade]}44)">
       <div class="box-icon" style="color: ${BOX_COLORS[box.grade]}">📦</div>
       <div class="box-name">${BOX_NAMES[box.grade]}</div>
@@ -147,39 +230,39 @@ function updateBoxesUI() {
  * 통계 UI 업데이트
  */
 function updateStatsUI() {
-    const stats = gameState.statistics;
-    document.getElementById('total-boxes').textContent = stats.totalBoxesOpened;
-    document.getElementById('total-floors').textContent = stats.totalFloorsCleared;
-    document.getElementById('inventory-count').textContent = gameState.inventory.length;
+  const stats = gameState.statistics;
+  document.getElementById('total-boxes').textContent = stats.totalBoxesOpened;
+  document.getElementById('total-floors').textContent = stats.totalFloorsCleared;
+  document.getElementById('inventory-count').textContent = gameState.inventory.length;
 }
 
 /**
  * 전투 로그 추가
  */
 function addBattleLog(message) {
-    const log = document.getElementById('battle-log');
-    const entry = document.createElement('div');
-    entry.className = 'log-entry';
-    entry.textContent = message;
-    log.appendChild(entry);
-    log.scrollTop = log.scrollHeight;
+  const log = document.getElementById('battle-log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.textContent = message;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
 }
 
 /**
  * 전투 로그 초기화
  */
 function clearBattleLog() {
-    document.getElementById('battle-log').innerHTML = '';
+  document.getElementById('battle-log').innerHTML = '';
 }
 
 /**
  * 가챠 결과 모달 표시
  */
 function showGachaResult(result) {
-    const modal = document.getElementById('gacha-modal');
-    const item = result.item;
+  const modal = document.getElementById('gacha-modal');
+  const item = result.item;
 
-    document.getElementById('gacha-result').innerHTML = `
+  document.getElementById('gacha-result').innerHTML = `
     <div class="gacha-animation">
       <div class="gacha-item" style="border-color: ${RARITY_COLORS[item.rarity]}; animation: gachaReveal 0.5s ease-out;">
         <div class="gacha-rarity" style="color: ${RARITY_COLORS[item.rarity]}">${RARITY_NAMES[item.rarity]}</div>
@@ -194,117 +277,177 @@ function showGachaResult(result) {
     </div>
   `;
 
-    modal.style.display = 'flex';
-    updateUI();
+  modal.style.display = 'flex';
+  updateUI();
 }
 
 /**
  * 가챠 모달 닫기
  */
 function closeGachaModal() {
-    document.getElementById('gacha-modal').style.display = 'none';
+  document.getElementById('gacha-modal').style.display = 'none';
 }
 
 /**
  * 탭 전환
  */
 function switchTab(tabName) {
-    // 모든 탭 숨기기
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
+  // 모든 탭 숨기기
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    tab.classList.remove('active');
+  });
 
-    // 모든 탭 버튼 비활성화
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
+  // 모든 탭 버튼 비활성화
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
 
-    // 선택한 탭 표시
-    document.getElementById(`${tabName}-tab`).classList.add('active');
-    document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+  // 선택한 탭 표시
+  document.getElementById(`${tabName}-tab`).classList.add('active');
+  document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
 
-    updateUI();
+  updateUI();
 }
 
 /**
  * 던전 선택 모달 표시
  */
 function showDungeonSelect() {
-    const modal = document.getElementById('dungeon-select-modal');
-    const list = document.getElementById('dungeon-list');
+  const modal = document.getElementById('dungeon-select-modal');
+  const list = document.getElementById('dungeon-list');
 
-    let html = '';
-    for (let i = 1; i < gameState.dungeon.maxFloor; i++) {
-        html += `
+  let html = '';
+  for (let i = 1; i < gameState.dungeon.maxFloor; i++) {
+    html += `
       <div class="dungeon-item">
         <span>${i}층 ${i % 5 === 0 ? '(보스)' : ''}</span>
         <button onclick="retryFloor(${i}); closeDungeonSelect();" class="btn-retry">재도전</button>
       </div>
     `;
-    }
+  }
 
-    list.innerHTML = html || '<div class="empty-message">재도전 가능한 던전이 없습니다</div>';
-    modal.style.display = 'flex';
+  list.innerHTML = html || '<div class="empty-message">재도전 가능한 던전이 없습니다</div>';
+  modal.style.display = 'flex';
 }
 
 /**
  * 던전 선택 모달 닫기
  */
 function closeDungeonSelect() {
-    document.getElementById('dungeon-select-modal').style.display = 'none';
+  document.getElementById('dungeon-select-modal').style.display = 'none';
 }
 
 /**
  * 세이브 모달 표시
  */
 function showSaveModal() {
-    const modal = document.getElementById('save-modal');
-    const code = generateSaveCode(gameState);
+  const modal = document.getElementById('save-modal');
+  const code = generateSaveCode(gameState);
 
-    document.getElementById('save-code-display').value = code;
-    modal.style.display = 'flex';
+  document.getElementById('save-code-display').value = code;
+  modal.style.display = 'flex';
 }
 
 /**
  * 세이브 모달 닫기
  */
 function closeSaveModal() {
-    document.getElementById('save-modal').style.display = 'none';
+  document.getElementById('save-modal').style.display = 'none';
 }
 
 /**
  * 로드 모달 표시
  */
 function showLoadModal() {
-    document.getElementById('load-modal').style.display = 'flex';
+  document.getElementById('load-modal').style.display = 'flex';
 }
 
 /**
  * 로드 모달 닫기
  */
 function closeLoadModal() {
-    document.getElementById('load-modal').style.display = 'none';
+  document.getElementById('load-modal').style.display = 'none';
 }
 
 /**
  * 세이브 코드 복사
  */
 function copySaveCode() {
-    const input = document.getElementById('save-code-display');
-    input.select();
-    document.execCommand('copy');
-    alert('세이브 코드가 복사되었습니다!');
+  const input = document.getElementById('save-code-display');
+  input.select();
+  document.execCommand('copy');
+  showSuccess('세이브 코드가 복사되었습니다!');
 }
 
 /**
  * 로드 실행
  */
 function executeLoad() {
-    const code = document.getElementById('load-code-input').value.trim();
-    if (code) {
-        loadGame(code);
-        closeLoadModal();
-    } else {
-        alert('세이브 코드를 입력해주세요.');
-    }
+  const code = document.getElementById('load-code-input').value.trim();
+  if (code) {
+    loadGame(code);
+    closeLoadModal();
+  } else {
+    showError('세이브 코드를 입력해주세요.');
+  }
+}
+
+/**
+ * 우물 모달 표시
+ */
+function showWellModal() {
+  document.getElementById('well-modal').style.display = 'flex';
+}
+
+/**
+ * 우물 모달 닫기
+ */
+function closeWellModal() {
+  document.getElementById('well-modal').style.display = 'none';
+}
+
+/**
+ * 새 게임 모달 표시
+ */
+function showNewGameModal() {
+  document.getElementById('new-game-modal').style.display = 'flex';
+}
+
+/**
+ * 새 게임 모달 닫기
+ */
+function closeNewGameModal() {
+  document.getElementById('new-game-modal').style.display = 'none';
+}
+
+/**
+ * 방향키로 이동
+ * @param {string} direction - 'up', 'down', 'left', 'right'
+ */
+function moveDirection(direction) {
+  const map = gameState.dungeon.currentMap;
+  if (!map) return;
+
+  const currentX = map.currentX;
+  const currentY = map.currentY;
+
+  let targetX = currentX;
+  let targetY = currentY;
+
+  switch (direction) {
+    case 'up':
+      targetY = currentY - 1;
+      break;
+    case 'down':
+      targetY = currentY + 1;
+      break;
+    case 'left':
+      targetX = currentX - 1;
+      break;
+    case 'right':
+      targetX = currentX + 1;
+      break;
+  }
+
+  enterRoom(targetX, targetY);
 }

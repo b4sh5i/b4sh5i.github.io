@@ -10,7 +10,8 @@ const ITEM_RARITY = {
 const ITEM_TYPE = {
     WEAPON: 'weapon',      // 무기
     ARMOR: 'armor',        // 방어구
-    ACCESSORY: 'accessory' // 악세서리
+    ACCESSORY: 'accessory', // 악세서리
+    CONSUMABLE: 'consumable' // 소모품
 };
 
 // 전체 아이템 데이터베이스
@@ -76,7 +77,14 @@ const ITEMS_DATABASE = [
     // 전설 악세서리
     { id: 34, name: '영원의 반지', type: ITEM_TYPE.ACCESSORY, rarity: ITEM_RARITY.LEGENDARY, attack: 40, defense: 40, hp: 150 },
     { id: 35, name: '세계수의 목걸이', type: ITEM_TYPE.ACCESSORY, rarity: ITEM_RARITY.LEGENDARY, attack: 35, defense: 35, hp: 200 },
-    { id: 36, name: '신의 팔찌', type: ITEM_TYPE.ACCESSORY, rarity: ITEM_RARITY.LEGENDARY, attack: 50, defense: 30, hp: 120 }
+    { id: 36, name: '신의 팔찌', type: ITEM_TYPE.ACCESSORY, rarity: ITEM_RARITY.LEGENDARY, attack: 50, defense: 30, hp: 120 },
+
+    // === 소모품 (CONSUMABLE) ===
+    // 포션류
+    { id: 37, name: '작은 체력 물약', type: ITEM_TYPE.CONSUMABLE, rarity: ITEM_RARITY.COMMON, attack: 0, defense: 0, hp: 0, healPercent: 10, isConsumable: true },
+    { id: 38, name: '중간 체력 물약', type: ITEM_TYPE.CONSUMABLE, rarity: ITEM_RARITY.RARE, attack: 0, defense: 0, hp: 0, healPercent: 25, isConsumable: true },
+    { id: 39, name: '큰 체력 물약', type: ITEM_TYPE.CONSUMABLE, rarity: ITEM_RARITY.HERO, attack: 0, defense: 0, hp: 0, healPercent: 50, isConsumable: true },
+    { id: 40, name: '완전 회복 물약', type: ITEM_TYPE.CONSUMABLE, rarity: ITEM_RARITY.LEGENDARY, attack: 0, defense: 0, hp: 0, healPercent: 100, isConsumable: true }
 ];
 
 // 등급별 색상 (UI용)
@@ -99,5 +107,6 @@ const RARITY_NAMES = {
 const TYPE_NAMES = {
     [ITEM_TYPE.WEAPON]: '무기',
     [ITEM_TYPE.ARMOR]: '방어구',
-    [ITEM_TYPE.ACCESSORY]: '악세서리'
+    [ITEM_TYPE.ACCESSORY]: '악세서리',
+    [ITEM_TYPE.CONSUMABLE]: '소모품'
 };

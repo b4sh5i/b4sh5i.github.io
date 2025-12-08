@@ -719,19 +719,321 @@ body {
 }
 
 @keyframes gachaReveal {
-    0% {
+    from {
+        transform: scale(0.5) rotateY(180deg);
         opacity: 0;
-        transform: scale(0.5) rotate(-10deg);
     }
 
-    50% {
-        transform: scale(1.1) rotate(5deg);
-    }
-
-    100% {
+    to {
+        transform: scale(1) rotateY(0);
         opacity: 1;
-        transform: scale(1) rotate(0deg);
     }
+}
+
+/* 토스트 메시지 스타일 */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: rgba(30, 30, 40, 0.95);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    min-width: 280px;
+    max-width: 400px;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    pointer-events: auto;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast.hide {
+    opacity: 0;
+    transform: translateX(400px);
+}
+
+.toast-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.toast-message {
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.toast-success {
+    border-left: 4px solid #4caf50;
+}
+
+.toast-error {
+    border-left: 4px solid #f44336;
+}
+
+.toast-info {
+    border-left: 4px solid #2196f3;
+}
+
+@media (max-width: 768px) {
+    .toast-container {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+    }
+
+    .toast {
+        min-width: auto;
+        max-width: 100%;
+    }
+}
+
+/* 미니맵 스타일 */
+.minimap-container {
+    background: var(--surface);
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+    box-shadow: var(--shadow);
+}
+
+.minimap-container h3 {
+    font-size: 1rem;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.minimap-grid {
+    display: grid;
+    gap: 8px;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.room-cell {
+    aspect-ratio: 1;
+    background: var(--surface-light);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.room-cell:not(.inaccessible):hover {
+    transform: scale(1.05);
+    border-color: var(--secondary-color);
+}
+
+.room-cell:not(.inaccessible):active {
+    transform: scale(0.95);
+}
+
+.room-cell.current {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 15px rgba(98, 0, 234, 0.5);
+}
+
+.room-cell.cleared {
+    background: var(--background);
+    opacity: 0.6;
+}
+
+.room-cell.well {
+    background: linear-gradient(135deg, #03dac622, #00bfa522);
+    border-color: var(--secondary-color);
+}
+
+.room-icon {
+    font-size: 2rem;
+}
+
+.room-cell.inaccessible {
+    background: var(--background);
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.room-cell.inaccessible:hover {
+    transform: none;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.room-cell.boss {
+    background: linear-gradient(135deg, #ffd60022, #ff940022);
+    border-color: var(--warning);
+    box-shadow: 0 0 15px rgba(255, 214, 0, 0.3);
+}
+
+/* 위치 표시 */
+.position-display {
+    font-size: 0.9rem;
+    color: var(--secondary-color);
+    font-weight: normal;
+}
+
+/* 방향 컨트롤 */
+.direction-controls {
+    background: var(--surface);
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+    box-shadow: var(--shadow);
+}
+
+.direction-controls h3 {
+    font-size: 1rem;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.direction-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    max-width: 250px;
+    margin: 0 auto;
+}
+
+.direction-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.direction-center {
+    flex: 1;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.btn-direction {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border: 2px solid var(--secondary-color);
+    border-radius: 12px;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-direction:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 25px rgba(98, 0, 234, 0.4);
+}
+
+.btn-direction:active {
+    transform: scale(0.95);
+}
+
+.btn-up,
+.btn-down {
+    align-self: center;
+}
+
+/* 소모품 스타일 */
+.consumables-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.consumable-card {
+    background: var(--surface);
+    padding: 15px;
+    border-radius: 12px;
+    border: 2px solid;
+    box-shadow: var(--shadow);
+    transition: all 0.3s;
+}
+
+.consumable-card:active {
+    transform: scale(0.98);
+}
+
+.consumable-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.consumable-name {
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+.consumable-rarity {
+    font-size: 0.75rem;
+}
+
+.consumable-effect {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.btn-use {
+    width: 100%;
+    padding: 8px;
+    background: linear-gradient(135deg, #00e676, #00c853);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-use:active {
+    transform: scale(0.95);
+}
+
+/* 빈 메시지 */
+.empty-message {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 40px 20px;
+    font-size: 0.95rem;
+}
+
+/* 탭 네비게이션 5개 대응 */
+.tab-nav {
+    grid-template-columns: repeat(5, 1fr);
 }
 
 .gacha-rarity {
@@ -747,9 +1049,19 @@ body {
 }
 
 .gacha-type {
+    font-size: 0.9rem;
     color: var(--text-secondary);
     margin-bottom: 15px;
 }
+
+.gacha-stats {
+    font-size: 1rem;
+}
+
+.gacha-stats div {
+    margin: 5px 0;
+}
+
 
 .gacha-stats {
     font-size: 1rem;
@@ -802,5 +1114,87 @@ body {
 
     .equipped-container {
         grid-template-columns: 1fr;
+    }
+}
+
+/* 사망 화면 (다크소울 스타일) */
+.death-screen {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+.death-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: grayscale(100%);
+    animation: deathFadeIn 1s ease-out;
+}
+
+.death-content {
+    position: relative;
+    z-index: 10000;
+    text-align: center;
+}
+
+.death-text {
+    font-size: 4rem;
+    font-weight: bold;
+    color: #8b0000;
+    text-shadow:
+        0 0 20px rgba(139, 0, 0, 0.8),
+        0 0 40px rgba(139, 0, 0, 0.6),
+        0 0 60px rgba(139, 0, 0, 0.4);
+    letter-spacing: 0.3em;
+    animation: deathTextAppear 1.5s ease-out;
+    font-family: 'Georgia', serif;
+}
+
+@keyframes deathFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes deathTextAppear {
+    0% {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+
+    50% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@media (max-width: 768px) {
+    .death-text {
+        font-size: 3rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .death-text {
+        font-size: 2rem;
+        letter-spacing: 0.2em;
     }
 }

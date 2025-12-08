@@ -87,8 +87,26 @@ function getRandomItemByRarity(rarity) {
  * @returns {object} 획득한 아이템
  */
 function openGachaBox(boxGrade) {
-    const rarity = determineItemRarity(boxGrade);
-    const item = getRandomItemByRarity(rarity);
+    // 20% 확률로 소모품 (포션) 드랍
+    const isConsumable = Math.random() < 0.2;
+
+    let item;
+    if (isConsumable) {
+        // 소모품 드랍
+        const rarity = determineItemRarity(boxGrade);
+        const consumables = ITEMS_DATABASE.filter(i => i.type === ITEM_TYPE.CONSUMABLE && i.rarity === rarity);
+        if (consumables.length > 0) {
+            item = { ...consumables[Math.floor(Math.random() * consumables.length)] };
+        } else {
+            // 해당 등급 소모품이 없으면 일반 아이템
+            const fallbackRarity = determineItemRarity(boxGrade);
+            item = getRandomItemByRarity(fallbackRarity);
+        }
+    } else {
+        // 일반 아이템 (장비)
+        const rarity = determineItemRarity(boxGrade);
+        item = getRandomItemByRarity(rarity);
+    }
 
     return {
         item: item,

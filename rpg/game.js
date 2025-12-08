@@ -22,9 +22,11 @@ let gameState = {
         currentFloor: 1,
         maxFloor: 1,
         inBattle: false,
-        currentEnemy: null
+        currentEnemy: null,
+        currentMap: null // 미니맵 데이터
     },
     inventory: [],
+    consumables: [], // 소모품 (포션)
     boxes: [], // 획득한 상자들
     statistics: {
         totalBoxesOpened: 0,
@@ -66,12 +68,12 @@ function generateEnemy(floor) {
     const baseAttack = 5 + (floor * 2);
     const baseDefense = 2 + Math.floor(floor / 2);
 
-    // 5층 단위는 보스
-    const isBoss = floor % 5 === 0;
-    const multiplier = isBoss ? 3 : 1;
+    // 5층 단위는 보스 없음 (우물로 대체)
+    const isBoss = false;
+    const multiplier = 1;
 
     return {
-        name: isBoss ? `${floor}층 보스` : `${floor}층 몬스터`,
+        name: `${floor}층 몬스터`,
         hp: baseHp * multiplier,
         maxHp: baseHp * multiplier,
         attack: baseAttack * multiplier,
@@ -82,15 +84,17 @@ function generateEnemy(floor) {
 }
 
 /**
- * 전투 시작
+ * 전투 시작 (방 진입 시 호출되지 않음, 레거시 함수)
  */
 function startBattle() {
     gameState.dungeon.currentEnemy = generateEnemy(gameState.dungeon.currentFloor);
     gameState.dungeon.inBattle = true;
 
-    // 플레이어 HP 초기화
+    // 플레이어 HP 초기화 (첫 층 시작시만)
     const stats = calculatePlayerStats();
-    gameState.player.currentHp = stats.hp;
+    if (gameState.player.currentHp <= 0) {
+        gameState.player.currentHp = stats.hp;
+    }
 
     updateUI();
     autoBattle();
@@ -141,8 +145,29 @@ function autoBattle() {
 function battleVictory() {
     gameState.dungeon.inBattle = false;
     const floor = gameState.dungeon.currentFloor;
+    const enemy = gameState.dungeon.currentEnemy;
 
-    addBattleLog(`🎉 ${floor}층 클리어!`);
+    addBattleLog(`🎉 승리!`);
+
+    // 보스 클리어 체크
+    if (enemy && enemy.isBoss) {
+        gameState.dungeon.currentMap.bossCleared = true;
+        addBattleLog(`👑 보스를 처치했습니다! 다음 층으로 이동할 수 있습니다.`);
+
+        // 보스 클리어 시 HP 15% 회복
+        const stats = calculatePlayerStats();
+        const healAmount = Math.floor(stats.hp * 0.15);
+        gameState.player.currentHp = Math.min(stats.hp, gameState.player.currentHp + healAmount);
+        addBattleLog(`💚 체력을 ${healAmount} 회복했습니다!`);
+    }
+
+    // 현재 방을 클리어로 표시
+    const map = gameState.dungeon.currentMap;
+    if (map) {
+        const room = map.grid[map.currentY][map.currentX];
+        room.cleared = true;
+        map.roomsCleared++;
+    }
 
     // 보상 상자 지급
     const boxGrade = getRewardBoxGrade(floor, false);
@@ -170,10 +195,74 @@ function battleDefeat() {
     gameState.dungeon.inBattle = false;
     addBattleLog('💀 전투에서 패배했습니다...');
 
-    // HP 회복
-    const stats = calculatePlayerStats();
-    gameState.player.currentHp = stats.hp;
+    // 사망 화면 표시
+    showDeathScreen();
+}
 
+/**
+ * 사망 화면 표시
+ */
+function showDeathScreen() {
+    const deathScreen = document.getElementById('death-screen');
+    deathScreen.style.display = 'flex';
+
+    // 3초 후 게임 리셋
+    setTimeout(() => {
+        resetGame();
+        deathScreen.style.display = 'none';
+    }, 3000);
+}
+
+/**
+ * 게임 완전 리셋
+ */
+function resetGame() {
+    // 저장 데이터 삭제
+    deleteSaveData();
+
+    // 게임 상태 초기화
+    gameState = {
+        player: {
+            name: '모험가',
+            level: 1,
+            exp: 0,
+            baseAttack: 10,
+            baseDefense: 5,
+            baseHp: 100,
+            currentHp: 100,
+            equipped: {
+                weapon: null,
+                armor: null,
+                accessory: null
+            }
+        },
+        dungeon: {
+            currentFloor: 1,
+            maxFloor: 1,
+            inBattle: false,
+            currentEnemy: null,
+            currentMap: null
+        },
+        inventory: [],
+        consumables: [],
+        boxes: [],
+        statistics: {
+            totalBoxesOpened: 0,
+            totalFloorsCleared: 0,
+            itemsObtained: {
+                common: 0,
+                rare: 0,
+                hero: 0,
+                legendary: 0
+            }
+        }
+    };
+
+    // 첫 층 맵 생성
+    gameState.dungeon.currentMap = generateFloorMap(1);
+
+    // UI 업데이트
+    clearBattleLog();
     updateUI();
 }
 
@@ -181,11 +270,30 @@ function battleDefeat() {
  * 다음 층으로 이동
  */
 function moveToNextFloor() {
-    if (gameState.dungeon.inBattle) return;
+    if (gameState.dungeon.inBattle) {
+        showError('전투 중에는 이동할 수 없습니다.');
+        return;
+    }
+
+    // 보스 클리어 체크
+    if (!gameState.dungeon.currentMap.bossCleared) {
+        showError('보스를 처치해야 다음 층으로 이동할 수 있습니다!');
+        return;
+    }
 
     gameState.dungeon.currentFloor++;
+
+    // 새로운 층 맵 생성
+    gameState.dungeon.currentMap = generateFloorMap(gameState.dungeon.currentFloor);
+
+    // 최대 층수 업데이트
+    if (gameState.dungeon.currentFloor > gameState.dungeon.maxFloor) {
+        gameState.dungeon.maxFloor = gameState.dungeon.currentFloor;
+    }
+
     clearBattleLog();
-    startBattle();
+    updateUI();
+    autoSave(gameState);
 }
 
 /**
@@ -294,8 +402,12 @@ function openBox(index) {
     const box = gameState.boxes[index];
     const result = openGachaBox(box.grade);
 
-    // 인벤토리에 추가
-    gameState.inventory.push(result.item);
+    // 소모품과 장비 분리
+    if (result.item.isConsumable) {
+        gameState.consumables.push(result.item);
+    } else {
+        gameState.inventory.push(result.item);
+    }
 
     // 통계 업데이트
     gameState.statistics.totalBoxesOpened++;
@@ -311,6 +423,40 @@ function openBox(index) {
 }
 
 /**
+ * 포션 사용
+ * @param {number} potionId - 포션 ID
+ */
+function usePotion(potionId) {
+    const potionIndex = gameState.consumables.findIndex(p => p.id === potionId);
+
+    if (potionIndex === -1) {
+        showError('포션을 찾을 수 없습니다.');
+        return;
+    }
+
+    const potion = gameState.consumables[potionIndex];
+    const stats = calculatePlayerStats();
+
+    // 이미 최대 체력이면 사용 불가
+    if (gameState.player.currentHp >= stats.hp) {
+        showError('체력이 이미 최대입니다.');
+        return;
+    }
+
+    // 체력 회복
+    const healAmount = Math.floor(stats.hp * (potion.healPercent / 100));
+    gameState.player.currentHp = Math.min(stats.hp, gameState.player.currentHp + healAmount);
+
+    // 포션 제거
+    gameState.consumables.splice(potionIndex, 1);
+
+    showSuccess(`${potion.name}을(를) 사용하여 체력을 ${healAmount} 회복했습니다!`);
+
+    autoSave(gameState);
+    updateUI();
+}
+
+/**
  * 게임 초기화
  */
 function initGame() {
@@ -320,6 +466,9 @@ function initGame() {
     if (savedState) {
         gameState = savedState;
         console.log('자동 저장 데이터 로드 완료');
+    } else {
+        // 새 게임 시작 - 첫 층 맵 생성
+        gameState.dungeon.currentMap = generateFloorMap(1);
     }
 
     updateUI();
@@ -329,10 +478,16 @@ function initGame() {
  * 새 게임 시작
  */
 function newGame() {
-    if (confirm('새 게임을 시작하시겠습니까? 현재 진행 상황이 삭제됩니다.')) {
-        deleteSaveData();
-        location.reload();
-    }
+    showNewGameModal();
+}
+
+/**
+ * 새 게임 확인 후 실행
+ */
+function confirmNewGame() {
+    deleteSaveData();
+    closeNewGameModal();
+    location.reload();
 }
 
 /**
@@ -344,9 +499,9 @@ function loadGame(saveCode) {
     if (savedState) {
         gameState = savedState;
         updateUI();
-        alert('게임 데이터를 불러왔습니다!');
+        showSuccess('게임 데이터를 불러왔습니다!');
     } else {
-        alert('잘못된 세이브 코드입니다.');
+        showError('잘못된 세이브 코드입니다.');
     }
 }
 
@@ -356,8 +511,8 @@ function loadGame(saveCode) {
 function showSaveCode() {
     const code = generateSaveCode(gameState);
     if (code) {
-        alert(`세이브 코드: ${code}\n\n이 코드를 저장해두면 언제든지 게임을 불러올 수 있습니다!`);
+        showSuccess('세이브 코드가 생성되었습니다!', 2000);
     } else {
-        alert('세이브 코드 생성에 실패했습니다.');
+        showError('세이브 코드 생성에 실패했습니다.');
     }
 }
