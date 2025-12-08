@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>던전 RPG - 방치형 모바일 게임</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="game-container">
+        <!-- 헤더 -->
+        <header class="game-header">
+            <h1>🗡️ 던전 RPG</h1>
+            <div class="header-buttons">
+                <button onclick="showSaveModal()" class="btn-header">💾 저장</button>
+                <button onclick="showLoadModal()" class="btn-header">📂 불러오기</button>
+                <button onclick="newGame()" class="btn-header">🔄 새게임</button>
+            </div>
+        </header>
+
+        <!-- 플레이어 정보 -->
+        <section class="player-info">
+            <div class="player-header">
+                <div class="player-name-level">
+                    <span id="player-name">모험가</span>
+                    <span class="level">Lv.<span id="player-level">1</span></span>
+                </div>
+                <div class="player-hp-container">
+                    <span id="player-hp">100 / 100</span>
+                    <div class="hp-bar-container">
+                        <div id="hp-bar" class="hp-bar"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="player-stats">
+                <div class="stat">
+                    <span class="stat-icon">⚔️</span>
+                    <span class="stat-label">공격력</span>
+                    <span id="player-attack" class="stat-value">10</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-icon">🛡️</span>
+                    <span class="stat-label">방어력</span>
+                    <span id="player-defense" class="stat-value">5</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 탭 네비게이션 -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('dungeon')">⚔️ 던전</button>
+            <button class="tab-btn" onclick="switchTab('inventory')">🎒 인벤토리</button>
+            <button class="tab-btn" onclick="switchTab('boxes')">📦 상자</button>
+            <button class="tab-btn" onclick="switchTab('stats')">📊 통계</button>
+        </nav>
+
+        <!-- 던전 탭 -->
+        <section id="dungeon-tab" class="tab-content active">
+            <div class="dungeon-header">
+                <h2>현재 층: <span id="current-floor">1</span>층</h2>
+                <p>최고 기록: <span id="max-floor">1</span>층</p>
+            </div>
+
+            <div id="enemy-info" class="enemy-container">
+                <div class="no-enemy">전투 준비 중...</div>
+            </div>
+
+            <div class="battle-log-container">
+                <h3>전투 로그</h3>
+                <div id="battle-log" class="battle-log"></div>
+            </div>
+
+            <div id="battle-actions" class="battle-actions">
+                <button onclick="startBattle()" class="btn-primary btn-large">⚔️ 전투 시작</button>
+                <button onclick="moveToNextFloor()" class="btn-secondary btn-large">➡️ 다음 층</button>
+                <button onclick="showDungeonSelect()" class="btn-secondary btn-large">🔄 재도전</button>
+            </div>
+        </section>
+
+        <!-- 인벤토리 탭 -->
+        <section id="inventory-tab" class="tab-content">
+            <h2>장착 아이템</h2>
+            <div class="equipped-container">
+                <div class="equipped-slot">
+                    <h4>무기</h4>
+                    <div id="equipped-weapon"></div>
+                </div>
+                <div class="equipped-slot">
+                    <h4>방어구</h4>
+                    <div id="equipped-armor"></div>
+                </div>
+                <div class="equipped-slot">
+                    <h4>악세서리</h4>
+                    <div id="equipped-accessory"></div>
+                </div>
+            </div>
+
+            <h2>보유 아이템</h2>
+            <div id="inventory-list" class="inventory-grid"></div>
+        </section>
+
+        <!-- 상자 탭 -->
+        <section id="boxes-tab" class="tab-content">
+            <h2>보유 상자</h2>
+            <div id="boxes-list" class="boxes-grid"></div>
+        </section>
+
+        <!-- 통계 탭 -->
+        <section id="stats-tab" class="tab-content">
+            <h2>게임 통계</h2>
+            <div class="stats-container">
+                <div class="stat-card">
+                    <div class="stat-icon">📦</div>
+                    <div class="stat-info">
+                        <div class="stat-label">열어본 상자</div>
+                        <div class="stat-value"><span id="total-boxes">0</span>개</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🏆</div>
+                    <div class="stat-info">
+                        <div class="stat-label">클리어한 층</div>
+                        <div class="stat-value"><span id="total-floors">0</span>층</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🎒</div>
+                    <div class="stat-info">
+                        <div class="stat-label">보유 아이템</div>
+                        <div class="stat-value"><span id="inventory-count">0</span>개</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 가챠 결과 모달 -->
+    <div id="gacha-modal" class="modal">
+        <div class="modal-content gacha-modal-content">
+            <h2>🎉 아이템 획득!</h2>
+            <div id="gacha-result"></div>
+            <button onclick="closeGachaModal()" class="btn-primary btn-large">확인</button>
+        </div>
+    </div>
+
+    <!-- 던전 선택 모달 -->
+    <div id="dungeon-select-modal" class="modal">
+        <div class="modal-content">
+            <h2>던전 재도전</h2>
+            <p class="modal-desc">이전 던전을 재도전하여 중급/하급 상자를 획득하세요!</p>
+            <div id="dungeon-list" class="dungeon-list"></div>
+            <button onclick="closeDungeonSelect()" class="btn-secondary">닫기</button>
+        </div>
+    </div>
+
+    <!-- 세이브 모달 -->
+    <div id="save-modal" class="modal">
+        <div class="modal-content">
+            <h2>💾 세이브 코드</h2>
+            <p class="modal-desc">이 코드를 저장해두면 언제든지 게임을 불러올 수 있습니다!</p>
+            <input type="text" id="save-code-display" readonly class="save-code-input">
+            <div class="modal-buttons">
+                <button onclick="copySaveCode()" class="btn-primary">📋 복사</button>
+                <button onclick="closeSaveModal()" class="btn-secondary">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 로드 모달 -->
+    <div id="load-modal" class="modal">
+        <div class="modal-content">
+            <h2>📂 게임 불러오기</h2>
+            <p class="modal-desc">세이브 코드를 입력하세요</p>
+            <input type="text" id="load-code-input" placeholder="세이브 코드 입력" class="save-code-input">
+            <div class="modal-buttons">
+                <button onclick="executeLoad()" class="btn-primary">불러오기</button>
+                <button onclick="closeLoadModal()" class="btn-secondary">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 스크립트 -->
+    <script src="data/items.js"></script>
+    <script src="systems/gacha.js"></script>
+    <script src="systems/save.js"></script>
+    <script src="game.js"></script>
+    <script src="ui/ui.js"></script>
+    <script>
+        // 게임 초기화
+        window.addEventListener('DOMContentLoaded', () => {
+            initGame();
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,806 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #6200ea;
+    --primary-dark: #4a00b8;
+    --secondary-color: #03dac6;
+    --background: #0a0e27;
+    --surface: #1a1f3a;
+    --surface-light: #252b4a;
+    --text-primary: #ffffff;
+    --text-secondary: #b0b8d4;
+    --success: #00e676;
+    --warning: #ffd600;
+    --error: #ff1744;
+    --hp-color: #f44336;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+body {
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.game-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 10px;
+    padding-bottom: 20px;
+}
+
+/* 헤더 */
+.game-header {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.game-header h1 {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-header {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-header:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* 플레이어 정보 */
+.player-info {
+    background: var(--surface);
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+    box-shadow: var(--shadow);
+}
+
+.player-header {
+    margin-bottom: 15px;
+}
+
+.player-name-level {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.level {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+}
+
+.player-hp-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.hp-bar-container {
+    flex: 1;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.hp-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--hp-color), #ff6b6b);
+    transition: width 0.3s;
+    border-radius: 10px;
+}
+
+.player-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.stat {
+    background: var(--surface-light);
+    padding: 10px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stat-icon {
+    font-size: 1.5rem;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+.stat-value {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: var(--secondary-color);
+}
+
+/* 탭 네비게이션 */
+.tab-nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.tab-btn {
+    background: var(--surface);
+    border: 2px solid transparent;
+    padding: 12px 8px;
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 500;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: white;
+    border-color: var(--secondary-color);
+}
+
+.tab-btn:active {
+    transform: scale(0.95);
+}
+
+/* 탭 컨텐츠 */
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 던전 */
+.dungeon-header {
+    background: var(--surface);
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+    text-align: center;
+    box-shadow: var(--shadow);
+}
+
+.dungeon-header h2 {
+    font-size: 1.3rem;
+    margin-bottom: 5px;
+}
+
+.dungeon-header p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.enemy-container {
+    background: var(--surface);
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+}
+
+.enemy-card {
+    width: 100%;
+    background: linear-gradient(135deg, #ff6b6b22, #ee5a6f22);
+    border: 2px solid #ff6b6b;
+    padding: 15px;
+    border-radius: 12px;
+    animation: enemyAppear 0.5s;
+}
+
+.enemy-card.boss {
+    background: linear-gradient(135deg, #ffd60022, #ff940022);
+    border-color: var(--warning);
+    box-shadow: 0 0 20px rgba(255, 214, 0, 0.3);
+}
+
+@keyframes enemyAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.enemy-name {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.enemy-hp {
+    text-align: center;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+}
+
+.enemy-stats {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+}
+
+.enemy-hp-bar {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.hp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff6b6b, #ee5a6f);
+    transition: width 0.3s;
+    border-radius: 10px;
+}
+
+.no-enemy {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+}
+
+.battle-log-container {
+    background: var(--surface);
+    padding: 15px;
+    border-radius: 15px;
+    margin-bottom: 15px;
+    box-shadow: var(--shadow);
+}
+
+.battle-log-container h3 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+    color: var(--text-secondary);
+}
+
+.battle-log {
+    background: var(--background);
+    padding: 10px;
+    border-radius: 10px;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+}
+
+.log-entry {
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.battle-actions {
+    display: grid;
+    gap: 10px;
+}
+
+/* 버튼 */
+.btn-primary,
+.btn-secondary,
+.btn-large {
+    border: none;
+    padding: 15px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: var(--shadow);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: white;
+}
+
+.btn-secondary {
+    background: var(--surface-light);
+    color: var(--text-primary);
+}
+
+.btn-primary:active,
+.btn-secondary:active {
+    transform: scale(0.95);
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    border: none;
+    background: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-small:active {
+    transform: scale(0.95);
+}
+
+/* 인벤토리 */
+.equipped-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.equipped-slot {
+    background: var(--surface);
+    padding: 12px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+}
+
+.equipped-slot h4 {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.equipped-item {
+    background: var(--surface-light);
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid;
+    text-align: center;
+}
+
+.item-name {
+    font-size: 0.85rem;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.item-rarity {
+    font-size: 0.75rem;
+    margin-bottom: 8px;
+}
+
+.empty-slot {
+    background: var(--surface-light);
+    padding: 15px 10px;
+    border-radius: 8px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.item-card {
+    background: var(--surface);
+    padding: 12px;
+    border-radius: 12px;
+    border: 2px solid;
+    box-shadow: var(--shadow);
+    transition: all 0.3s;
+}
+
+.item-card:active {
+    transform: scale(0.98);
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.item-type {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.item-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 0.8rem;
+}
+
+.item-stats span {
+    background: var(--surface-light);
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.btn-equip {
+    width: 100%;
+    padding: 8px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-equip:active {
+    transform: scale(0.95);
+}
+
+.equipped-badge {
+    background: var(--success);
+    color: white;
+    padding: 6px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+/* 상자 */
+.boxes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.box-card {
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: all 0.3s;
+}
+
+.box-card:active {
+    transform: scale(0.98);
+}
+
+.box-icon {
+    font-size: 3rem;
+    margin-bottom: 10px;
+}
+
+.box-name {
+    font-size: 1rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.box-floor {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.btn-open {
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-weight: bold;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-open:active {
+    transform: scale(0.95);
+}
+
+/* 통계 */
+.stats-container {
+    display: grid;
+    gap: 15px;
+}
+
+.stat-card {
+    background: var(--surface);
+    padding: 20px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: var(--shadow);
+}
+
+.stat-card .stat-icon {
+    font-size: 2.5rem;
+}
+
+.stat-card .stat-info {
+    flex: 1;
+}
+
+.stat-card .stat-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+}
+
+.stat-card .stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--secondary-color);
+}
+
+/* 모달 */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.3s;
+}
+
+.modal-content {
+    background: var(--surface);
+    padding: 25px;
+    border-radius: 20px;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.3s;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-content h2 {
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.modal-desc {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.save-code-input {
+    width: 100%;
+    padding: 15px;
+    background: var(--background);
+    border: 2px solid var(--surface-light);
+    border-radius: 10px;
+    color: white;
+    font-size: 1.1rem;
+    text-align: center;
+    font-family: monospace;
+    margin-bottom: 15px;
+}
+
+.modal-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.dungeon-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+}
+
+.dungeon-item {
+    background: var(--surface-light);
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.btn-retry {
+    padding: 8px 16px;
+    background: var(--primary-color);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-retry:active {
+    transform: scale(0.95);
+}
+
+/* 가챠 모달 */
+.gacha-modal-content {
+    text-align: center;
+}
+
+.gacha-animation {
+    margin: 20px 0;
+}
+
+.gacha-item {
+    background: var(--surface-light);
+    padding: 25px;
+    border-radius: 15px;
+    border: 3px solid;
+    display: inline-block;
+    min-width: 250px;
+}
+
+@keyframes gachaReveal {
+    0% {
+        opacity: 0;
+        transform: scale(0.5) rotate(-10deg);
+    }
+
+    50% {
+        transform: scale(1.1) rotate(5deg);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+.gacha-rarity {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.gacha-name {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.gacha-type {
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+}
+
+.gacha-stats {
+    font-size: 1rem;
+}
+
+.gacha-stats div {
+    margin: 5px 0;
+}
+
+.empty-message {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 40px 20px;
+    font-size: 1rem;
+}
+
+/* 스크롤바 */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--surface);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
+}
+
+/* 모바일 최적화 */
+@media (max-width: 480px) {
+    .game-header h1 {
+        font-size: 1.2rem;
+    }
+
+    .btn-header {
+        font-size: 0.75rem;
+        padding: 6px 10px;
+    }
+
+    .inventory-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .equipped-container {
+        grid-template-columns: 1fr;
+    }
+}
