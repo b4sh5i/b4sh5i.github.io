@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vampire Survivors Clone</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Start Screen -->
+        <div id="start-screen" class="screen">
+            <h1>VAMPIRE SURVIVORS</h1>
+            <p class="subtitle">로그라이크 서바이벌 게임</p>
+            <button id="start-button" class="btn-primary">게임 시작</button>
+            <div class="instructions">
+                <h3>조작법</h3>
+                <p>↑ ↓ ← → 방향키로 이동</p>
+                <p>공격은 자동으로 발사됩니다</p>
+                <p>ESC: 일시정지</p>
+            </div>
+        </div>
+
+        <!-- Game Canvas -->
+        <canvas id="game-canvas"></canvas>
+
+        <!-- HUD -->
+        <div id="hud" class="hidden">
+            <div class="hud-top">
+                <div class="hud-left">
+                    <div class="stat">
+                        <span class="label">레벨</span>
+                        <span id="player-level" class="value">1</span>
+                    </div>
+                    <div class="health-bar-container">
+                        <div id="health-bar" class="health-bar"></div>
+                        <span id="health-text" class="health-text">100/100</span>
+                    </div>
+                    <div class="exp-bar-container">
+                        <div id="exp-bar" class="exp-bar"></div>
+                    </div>
+                </div>
+                <div class="hud-right">
+                    <div class="stat">
+                        <span class="label">시간</span>
+                        <span id="timer" class="value">00:00</span>
+                    </div>
+                    <div class="stat">
+                        <span class="label">처치</span>
+                        <span id="kill-count" class="value">0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Level Up Screen -->
+        <div id="levelup-screen" class="screen hidden">
+            <h2>레벨 업!</h2>
+            <p class="levelup-subtitle">무기 또는 능력을 선택하세요</p>
+            <div id="levelup-options" class="levelup-options"></div>
+        </div>
+
+        <!-- Pause Screen -->
+        <div id="pause-screen" class="screen hidden">
+            <h2>일시정지</h2>
+            <button id="resume-button" class="btn-primary">계속하기</button>
+            <button id="quit-button" class="btn-secondary">메인으로</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="screen hidden">
+            <h1>게임 오버</h1>
+            <div class="stats-container">
+                <div class="stat-item">
+                    <span class="stat-label">생존 시간</span>
+                    <span id="final-time" class="stat-value">00:00</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">처치 수</span>
+                    <span id="final-kills" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">최종 레벨</span>
+                    <span id="final-level" class="stat-value">1</span>
+                </div>
+            </div>
+            <button id="restart-button" class="btn-primary">다시 시작</button>
+            <button id="menu-button" class="btn-secondary">메인으로</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
