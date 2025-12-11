@@ -12,7 +12,7 @@ const CONFIG = {
     enemy: {
         baseSpeed: 80,
         baseHealth: 10,
-        baseDamage: 10,
+        baseDamage: 20, // Increased from 10 to 20
         spawnInterval: 1000,
         spawnDistance: 100
     },
@@ -118,16 +118,19 @@ class Player {
         this.invulnerable = false;
         this.invulnerableTime = 0;
         this.damageFlash = 0;
+        this.rotation = 0;
+        this.targetRotation = 0;
+        this.thrustPower = 0;
     }
 
     takeDamage(damage) {
         if (this.invulnerable) return;
-        
+
         this.health -= damage;
         this.invulnerable = true;
         this.invulnerableTime = 0.5;
         this.damageFlash = 0.2;
-        
+
         if (this.health <= 0) {
             this.health = 0;
             return true; // Player died
@@ -158,6 +161,20 @@ class Player {
         this.vx = normalized.x * CONFIG.player.speed;
         this.vy = normalized.y * CONFIG.player.speed;
 
+        // Update rotation based on movement direction
+        if (dx !== 0 || dy !== 0) {
+            this.targetRotation = Math.atan2(dy, dx);
+            this.thrustPower = 1;
+        } else {
+            this.thrustPower = Math.max(0, this.thrustPower - dt * 3);
+        }
+
+        // Smooth rotation
+        let rotDiff = this.targetRotation - this.rotation;
+        while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+        while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+        this.rotation += rotDiff * dt * 10;
+
         this.x += this.vx * dt;
         this.y += this.vy * dt;
 
@@ -178,11 +195,14 @@ class Player {
         }
     }
 
-    draw(ctx, camera) {
+    draw(ctx, camera, time) {
         ctx.save();
-        
+
         const screenX = this.x - camera.x;
         const screenY = this.y - camera.y;
+
+        ctx.translate(screenX, screenY);
+        ctx.rotate(this.rotation);
 
         // Invulnerability flash
         if (this.invulnerable && Math.floor(this.invulnerableTime * 20) % 2 === 0) {
@@ -195,21 +215,71 @@ class Player {
             ctx.shadowColor = '#ff0066';
         }
 
-        // Draw player
-        ctx.fillStyle = '#00ffff';
+        // Thrust effect
+        if (this.thrustPower > 0) {
+            const thrustLength = 15 * this.thrustPower;
+            const thrustFlicker = 0.8 + Math.random() * 0.4;
+            ctx.globalAlpha = this.thrustPower * thrustFlicker;
+
+            ctx.fillStyle = '#00d4ff';
+            ctx.beginPath();
+            ctx.moveTo(-this.size - 5, 0);
+            ctx.lineTo(-this.size - thrustLength, -5);
+            ctx.lineTo(-this.size - thrustLength, 5);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(-this.size - 5, 0);
+            ctx.lineTo(-this.size - thrustLength * 0.6, -3);
+            ctx.lineTo(-this.size - thrustLength * 0.6, 3);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.globalAlpha = 1;
+        }
+
+        // Draw UFO body
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00d4ff';
+
+        // Main saucer
+        ctx.fillStyle = '#00d4ff';
         ctx.strokeStyle = '#0088ff';
-        ctx.lineWidth = 3;
-        
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, this.size, this.size * 0.5, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        // Inner glow
+        // Dome
+        ctx.fillStyle = '#00ffff';
+        ctx.beginPath();
+        ctx.ellipse(0, -this.size * 0.3, this.size * 0.6, this.size * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Dome highlight
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(screenX, screenY, this.size * 0.5, 0, Math.PI * 2);
+        ctx.ellipse(-this.size * 0.2, -this.size * 0.4, this.size * 0.2, this.size * 0.15, 0, 0, Math.PI * 2);
         ctx.fill();
+
+        // Lights
+        const lightCount = 6;
+        for (let i = 0; i < lightCount; i++) {
+            const angle = (i / lightCount) * Math.PI * 2 + time * 2;
+            const lx = Math.cos(angle) * this.size * 0.8;
+            const ly = Math.sin(angle) * this.size * 0.4;
+
+            ctx.fillStyle = `hsl(${(time * 100 + i * 60) % 360}, 100%, 70%)`;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.beginPath();
+            ctx.arc(lx, ly, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.restore();
     }
@@ -220,12 +290,39 @@ class Enemy {
     constructor(x, y, level) {
         this.x = x;
         this.y = y;
-        this.size = 15;
-        this.speed = CONFIG.enemy.baseSpeed + level * 5;
-        this.health = CONFIG.enemy.baseHealth + level * 5;
+
+        // Determine enemy type based on level and randomness
+        const rand = Math.random();
+        if (level >= 5 && rand < 0.2) {
+            this.type = 'heavy'; // Strong UFO
+            this.size = 20;
+            this.speed = CONFIG.enemy.baseSpeed + level * 3;
+            this.health = CONFIG.enemy.baseHealth * 10 + level * 50; // Increased from *3 + level*15
+            this.damage = CONFIG.enemy.baseDamage * 2 + level * 4;
+            this.color = '#ff0066';
+            this.glowColor = '#ff0099';
+        } else if (level >= 2 && rand < 0.5) {
+            this.type = 'medium'; // Medium UFO
+            this.size = 16;
+            this.speed = CONFIG.enemy.baseSpeed + level * 5;
+            this.health = CONFIG.enemy.baseHealth * 5 + level * 30; // Increased from *1.5 + level*8
+            this.damage = CONFIG.enemy.baseDamage * 1.5 + level * 3;
+            this.color = '#ff6600';
+            this.glowColor = '#ff9933';
+        } else {
+            this.type = 'light'; // Weak UFO
+            this.size = 12;
+            this.speed = CONFIG.enemy.baseSpeed + level * 6;
+            this.health = CONFIG.enemy.baseHealth * 3 + level * 20; // Increased from *1 + level*5
+            this.damage = CONFIG.enemy.baseDamage + level * 2;
+            this.color = '#66ff00';
+            this.glowColor = '#99ff33';
+        }
+
         this.maxHealth = this.health;
-        this.damage = CONFIG.enemy.baseDamage + level * 2;
         this.hitFlash = 0;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 2;
     }
 
     takeDamage(damage) {
@@ -243,44 +340,80 @@ class Enemy {
         this.x += normalized.x * this.speed * dt;
         this.y += normalized.y * this.speed * dt;
 
+        // Rotate
+        this.rotation += this.rotationSpeed * dt;
+
         if (this.hitFlash > 0) {
             this.hitFlash -= dt;
         }
     }
 
-    draw(ctx, camera) {
+    draw(ctx, camera, time) {
         ctx.save();
-        
+
         const screenX = this.x - camera.x;
         const screenY = this.y - camera.y;
 
+        ctx.translate(screenX, screenY);
+        ctx.rotate(this.rotation);
+
         // Hit flash
         if (this.hitFlash > 0) {
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = '#ff0066';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ffffff';
+        } else {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = this.glowColor;
         }
 
-        // Draw enemy
-        ctx.fillStyle = '#ff0066';
-        ctx.strokeStyle = '#cc0044';
+        // Draw enemy UFO
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = this.glowColor;
         ctx.lineWidth = 2;
-        
+
+        // Main saucer
         ctx.beginPath();
-        ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, this.size, this.size * 0.4, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        // Health bar
+        // Dome
+        const domeColor = this.type === 'heavy' ? '#990033' :
+            this.type === 'medium' ? '#cc3300' : '#339900';
+        ctx.fillStyle = domeColor;
+        ctx.beginPath();
+        ctx.ellipse(0, -this.size * 0.2, this.size * 0.5, this.size * 0.3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Lights
+        const lightCount = this.type === 'heavy' ? 8 : this.type === 'medium' ? 6 : 4;
+        for (let i = 0; i < lightCount; i++) {
+            const angle = (i / lightCount) * Math.PI * 2 + time * 3;
+            const lx = Math.cos(angle) * this.size * 0.7;
+            const ly = Math.sin(angle) * this.size * 0.3;
+
+            ctx.fillStyle = this.glowColor;
+            ctx.shadowBlur = 5;
+            ctx.beginPath();
+            ctx.arc(lx, ly, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+
+        // Health bar (drawn without rotation)
+        ctx.save();
         const healthBarWidth = this.size * 2;
-        const healthBarHeight = 4;
+        const healthBarHeight = 3;
         const healthPercent = this.health / this.maxHealth;
 
-        ctx.fillStyle = '#000';
-        ctx.fillRect(screenX - healthBarWidth / 2, screenY - this.size - 10, healthBarWidth, healthBarHeight);
-        
-        ctx.fillStyle = '#00ff00';
-        ctx.fillRect(screenX - healthBarWidth / 2, screenY - this.size - 10, healthBarWidth * healthPercent, healthBarHeight);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(screenX - healthBarWidth / 2, screenY - this.size - 8, healthBarWidth, healthBarHeight);
 
+        const healthColor = healthPercent > 0.6 ? '#00ff00' : healthPercent > 0.3 ? '#ffff00' : '#ff0000';
+        ctx.fillStyle = healthColor;
+        ctx.fillRect(screenX - healthBarWidth / 2, screenY - this.size - 8, healthBarWidth * healthPercent, healthBarHeight);
         ctx.restore();
     }
 }
@@ -299,7 +432,7 @@ class ExperienceGem {
 
     update(dt, player, time) {
         const dist = distance(this.x, this.y, player.x, player.y);
-        
+
         if (dist < CONFIG.experience.collectRadius) {
             this.collected = true;
             return true;
@@ -394,7 +527,7 @@ class Weapon {
 
 class MagicWand extends Weapon {
     constructor() {
-        super('마법봉', '가장 가까운 적을 향해 마법 탄환 발사');
+        super('레이저 캐논', '가장 가까운 적을 향해 레이저 발사');
         this.fireRate = 1.5;
         this.projectileSpeed = 400;
         this.damage = 15;
@@ -422,7 +555,7 @@ class MagicWand extends Weapon {
                 const vy = Math.sin(angle) * this.projectileSpeed;
                 projectiles.push(new Projectile(
                     player.x, player.y, vx, vy,
-                    this.damage + this.level * 5, 6, '#8a2be2', 3
+                    this.damage + this.level * 5, 6, '#00ffff', 3
                 ));
             }
             this.cooldown = this.fireRate / (1 + this.level * 0.1);
@@ -432,7 +565,7 @@ class MagicWand extends Weapon {
 
 class Whip extends Weapon {
     constructor() {
-        super('채찍', '주변을 휘두르는 강력한 근접 공격');
+        super('플라즈마 웨이브', '주변을 휘두르는 강력한 플라즈마 공격');
         this.fireRate = 2;
         this.damage = 25;
         this.range = 80;
@@ -444,24 +577,24 @@ class Whip extends Weapon {
 
         this.angle += Math.PI / 4;
         const count = 2 + Math.floor(this.level / 2);
-        
+
         for (let i = 0; i < count; i++) {
             const angle = this.angle + (Math.PI * 2 / count) * i;
             const vx = Math.cos(angle) * this.range * 3;
             const vy = Math.sin(angle) * this.range * 3;
             projectiles.push(new Projectile(
                 player.x, player.y, vx, vy,
-                this.damage + this.level * 8, 10, '#ff6b00', 0.3
+                this.damage + this.level * 8, 10, '#ff00ff', 0.3
             ));
         }
-        
+
         this.cooldown = this.fireRate / (1 + this.level * 0.15);
     }
 }
 
 class HolyBible extends Weapon {
     constructor() {
-        super('성서', '플레이어 주위를 도는 보호막');
+        super('오비탈 드론', 'UFO 주위를 도는 방어 드론');
         this.fireRate = 0.1;
         this.damage = 10;
         this.orbitRadius = 60;
@@ -484,13 +617,13 @@ class HolyBible extends Weapon {
             const y = player.y + Math.sin(angle) * this.orbitRadius;
             const vx = Math.cos(angle + Math.PI / 2) * this.orbitRadius * this.orbitSpeed;
             const vy = Math.sin(angle + Math.PI / 2) * this.orbitRadius * this.orbitSpeed;
-            
+
             projectiles.push(new Projectile(
                 x, y, vx, vy,
                 this.damage + this.level * 3, 8, '#ffff00', 0.1
             ));
         }
-        
+
         this.cooldown = this.fireRate;
     }
 }
@@ -530,7 +663,7 @@ class Game {
     setupEventListeners() {
         document.addEventListener('keydown', (e) => {
             this.keys[e.key] = true;
-            
+
             if (e.key === 'Escape' && this.gameState === 'playing') {
                 this.pause();
             }
@@ -562,7 +695,7 @@ class Game {
         this.projectiles = [];
         this.experienceGems = [];
         this.particles = new ParticleSystem();
-        
+
         // Start with magic wand
         this.weapons = [new MagicWand()];
 
@@ -602,20 +735,20 @@ class Game {
 
     gameOver() {
         this.gameState = 'gameover';
-        
+
         const minutes = Math.floor(this.time / 60);
         const seconds = Math.floor(this.time % 60);
-        document.getElementById('final-time').textContent = 
+        document.getElementById('final-time').textContent =
             `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         document.getElementById('final-kills').textContent = this.killCount;
         document.getElementById('final-level').textContent = this.player.level;
-        
+
         document.getElementById('gameover-screen').classList.remove('hidden');
     }
 
     showLevelUp() {
         this.gameState = 'levelup';
-        
+
         const options = this.generateLevelUpOptions();
         const container = document.getElementById('levelup-options');
         container.innerHTML = '';
@@ -638,9 +771,9 @@ class Game {
     generateLevelUpOptions() {
         const options = [];
         const availableWeapons = [
-            { class: MagicWand, name: '마법봉', description: '가장 가까운 적을 향해 마법 탄환 발사' },
-            { class: Whip, name: '채찍', description: '주변을 휘두르는 강력한 근접 공격' },
-            { class: HolyBible, name: '성서', description: '플레이어 주위를 도는 보호막' }
+            { class: MagicWand, name: '레이저 캐논', description: '가장 가까운 적을 향해 레이저 발사' },
+            { class: Whip, name: '플라즈마 웨이브', description: '주변을 휘두르는 강력한 플라즈마 공격' },
+            { class: HolyBible, name: '오비탈 드론', description: 'UFO 주위를 도는 방어 드론' }
         ];
 
         // Existing weapons upgrade
@@ -759,10 +892,23 @@ class Game {
         this.enemies.forEach(enemy => {
             enemy.update(dt, this.player);
 
-            // Check collision with player
-            if (distance(enemy.x, enemy.y, this.player.x, this.player.y) < enemy.size + this.player.size) {
-                if (this.player.takeDamage(enemy.damage * dt)) {
+            // Check collision with player - using tighter collision detection
+            const dist = distance(enemy.x, enemy.y, this.player.x, this.player.y);
+            const collisionDistance = (enemy.size + this.player.size) * 0.8; // 80% of combined size for tighter collision
+
+            if (dist < collisionDistance) {
+                // Deal damage per second (multiply by dt to make it frame-independent)
+                const damagePerSecond = enemy.damage * 2; // Increased damage multiplier
+                if (this.player.takeDamage(damagePerSecond * dt)) {
                     this.gameOver();
+                }
+
+                // Visual feedback - particle effect on collision
+                if (Math.random() < 0.1) { // 10% chance per frame to emit particles
+                    this.particles.emit(
+                        this.player.x, this.player.y, 3,
+                        '#ff0066', [2, 4], [30, 60], 0.3
+                    );
                 }
             }
         });
@@ -776,7 +922,7 @@ class Game {
         // Update projectiles
         this.projectiles = this.projectiles.filter(proj => {
             const alive = proj.update(dt);
-            
+
             // Check collision with enemies
             this.enemies.forEach(enemy => {
                 if (!proj.hit && distance(proj.x, proj.y, enemy.x, enemy.y) < proj.size + enemy.size) {
@@ -820,63 +966,111 @@ class Game {
     updateHUD() {
         document.getElementById('player-level').textContent = this.player.level;
         document.getElementById('health-bar').style.width = (this.player.health / this.player.maxHealth * 100) + '%';
-        document.getElementById('health-text').textContent = 
+        document.getElementById('health-text').textContent =
             `${Math.ceil(this.player.health)}/${this.player.maxHealth}`;
-        document.getElementById('exp-bar').style.width = 
+        document.getElementById('exp-bar').style.width =
             (this.player.experience / this.player.experienceToNext * 100) + '%';
-        
+
         const minutes = Math.floor(this.time / 60);
         const seconds = Math.floor(this.time % 60);
-        document.getElementById('timer').textContent = 
+        document.getElementById('timer').textContent =
             `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         document.getElementById('kill-count').textContent = this.killCount;
     }
 
     draw() {
-        // Clear canvas
-        this.ctx.fillStyle = '#0f0f1e';
+        // Clear canvas with space background
+        this.ctx.fillStyle = '#0a0e1a';
         this.ctx.fillRect(0, 0, CONFIG.canvas.width, CONFIG.canvas.height);
 
-        // Draw grid
-        this.drawGrid();
+        // Draw space background
+        this.drawSpaceBackground();
 
         // Draw experience gems
         this.experienceGems.forEach(gem => gem.draw(this.ctx, this.camera, this.time));
 
         // Draw enemies
-        this.enemies.forEach(enemy => enemy.draw(this.ctx, this.camera));
+        this.enemies.forEach(enemy => enemy.draw(this.ctx, this.camera, this.time));
 
         // Draw projectiles
         this.projectiles.forEach(proj => proj.draw(this.ctx, this.camera));
 
         // Draw player
-        this.player.draw(this.ctx, this.camera);
+        this.player.draw(this.ctx, this.camera, this.time);
 
         // Draw particles
         this.particles.draw(this.ctx, this.camera);
     }
 
-    drawGrid() {
-        const gridSize = 50;
-        const startX = Math.floor(this.camera.x / gridSize) * gridSize;
-        const startY = Math.floor(this.camera.y / gridSize) * gridSize;
+    drawSpaceBackground() {
+        const ctx = this.ctx;
 
-        this.ctx.strokeStyle = 'rgba(138, 43, 226, 0.1)';
-        this.ctx.lineWidth = 1;
+        // Draw stars
+        const starDensity = 100;
+        for (let i = 0; i < starDensity; i++) {
+            const seed = i * 12345;
+            const x = ((seed * 9301 + 49297) % 233280) / 233280 * this.worldWidth;
+            const y = ((seed * 1234 + 8765) % 233280) / 233280 * this.worldHeight;
 
-        for (let x = startX; x < this.camera.x + CONFIG.canvas.width; x += gridSize) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(x - this.camera.x, 0);
-            this.ctx.lineTo(x - this.camera.x, CONFIG.canvas.height);
-            this.ctx.stroke();
+            const screenX = x - this.camera.x;
+            const screenY = y - this.camera.y;
+
+            if (screenX >= -10 && screenX <= CONFIG.canvas.width + 10 &&
+                screenY >= -10 && screenY <= CONFIG.canvas.height + 10) {
+
+                const size = ((seed % 3) + 1) * 0.5;
+                const brightness = 0.5 + ((seed % 50) / 100);
+                const twinkle = Math.sin(this.time * 2 + seed) * 0.3 + 0.7;
+
+                ctx.fillStyle = `rgba(255, 255, 255, ${brightness * twinkle})`;
+                ctx.shadowBlur = size * 2;
+                ctx.shadowColor = '#ffffff';
+                ctx.fillRect(screenX, screenY, size, size);
+            }
         }
 
-        for (let y = startY; y < this.camera.y + CONFIG.canvas.height; y += gridSize) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(0, y - this.camera.y);
-            this.ctx.lineTo(CONFIG.canvas.width, y - this.camera.y);
-            this.ctx.stroke();
-        }
+        // Draw distant planets
+        const planets = [
+            { x: 500, y: 400, size: 40, color: '#4a5f8f', rings: false },
+            { x: 2000, y: 1500, size: 60, color: '#8f4a5f', rings: true },
+            { x: 1200, y: 2200, size: 35, color: '#5f8f4a', rings: false }
+        ];
+
+        planets.forEach(planet => {
+            const screenX = planet.x - this.camera.x;
+            const screenY = planet.y - this.camera.y;
+
+            if (screenX >= -planet.size - 50 && screenX <= CONFIG.canvas.width + planet.size + 50 &&
+                screenY >= -planet.size - 50 && screenY <= CONFIG.canvas.height + planet.size + 50) {
+
+                ctx.save();
+                ctx.globalAlpha = 0.6;
+
+                // Planet shadow
+                const gradient = ctx.createRadialGradient(
+                    screenX - planet.size * 0.3, screenY - planet.size * 0.3, planet.size * 0.1,
+                    screenX, screenY, planet.size
+                );
+                gradient.addColorStop(0, planet.color);
+                gradient.addColorStop(1, '#000000');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, planet.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Rings
+                if (planet.rings) {
+                    ctx.strokeStyle = 'rgba(150, 150, 150, 0.4)';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.ellipse(screenX, screenY, planet.size * 1.5, planet.size * 0.3, Math.PI / 6, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
+        });
     }
 
     gameLoop() {
