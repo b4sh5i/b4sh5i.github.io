@@ -1,97 +1,106 @@
 <!DOCTYPE html>
 <html lang="ko">
-
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Survivors</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Space Arena - Roguelike Survivor</title>
+    <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
-    <div id="game-container">
-        <!-- Start Screen -->
-        <div id="start-screen" class="screen">
-            <h1>SPACE SURVIVORS</h1>
-            <p class="subtitle">우주 UFO 서바이벌 게임</p>
-            <button id="start-button" class="btn-primary">게임 시작</button>
-            <div class="instructions">
-                <h3>조작법</h3>
-                <p>↑ ↓ ← → 방향키로 UFO 이동</p>
-                <p>공격은 자동으로 발사됩니다</p>
-                <p>ESC: 일시정지</p>
+    <!-- Start Screen -->
+    <div id="startScreen" class="screen">
+        <div class="screen-content">
+            <h1 class="game-title">SPACE ARENA</h1>
+            <p class="game-subtitle">Survive the cosmic onslaught</p>
+            <button id="startButton" class="btn-primary">START GAME</button>
+            <div class="controls-info">
+                <p>🎮 Touch and drag to move your UFO</p>
+                <p>⚡ Weapons fire automatically</p>
+                <p>💀 Survive as long as you can</p>
             </div>
-        </div>
-
-        <!-- Game Canvas -->
-        <canvas id="game-canvas"></canvas>
-
-        <!-- HUD -->
-        <div id="hud" class="hidden">
-            <div class="hud-top">
-                <div class="hud-left">
-                    <div class="stat">
-                        <span class="label">레벨</span>
-                        <span id="player-level" class="value">1</span>
-                    </div>
-                    <div class="health-bar-container">
-                        <div id="health-bar" class="health-bar"></div>
-                        <span id="health-text" class="health-text">100/100</span>
-                    </div>
-                    <div class="exp-bar-container">
-                        <div id="exp-bar" class="exp-bar"></div>
-                    </div>
-                </div>
-                <div class="hud-right">
-                    <div class="stat">
-                        <span class="label">시간</span>
-                        <span id="timer" class="value">00:00</span>
-                    </div>
-                    <div class="stat">
-                        <span class="label">처치</span>
-                        <span id="kill-count" class="value">0</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Level Up Screen -->
-        <div id="levelup-screen" class="screen hidden">
-            <h2>레벨 업!</h2>
-            <p class="levelup-subtitle">무기 또는 능력을 선택하세요</p>
-            <div id="levelup-options" class="levelup-options"></div>
-        </div>
-
-        <!-- Pause Screen -->
-        <div id="pause-screen" class="screen hidden">
-            <h2>일시정지</h2>
-            <button id="resume-button" class="btn-primary">계속하기</button>
-            <button id="quit-button" class="btn-secondary">메인으로</button>
-        </div>
-
-        <!-- Game Over Screen -->
-        <div id="gameover-screen" class="screen hidden">
-            <h1>게임 오버</h1>
-            <div class="stats-container">
-                <div class="stat-item">
-                    <span class="stat-label">생존 시간</span>
-                    <span id="final-time" class="stat-value">00:00</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">처치 수</span>
-                    <span id="final-kills" class="stat-value">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">최종 레벨</span>
-                    <span id="final-level" class="stat-value">1</span>
-                </div>
-            </div>
-            <button id="restart-button" class="btn-primary">다시 시작</button>
-            <button id="menu-button" class="btn-secondary">메인으로</button>
         </div>
     </div>
 
-    <script src="game.js"></script>
-</body>
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
 
+    <!-- Game UI Overlay -->
+    <div id="gameUI" class="hidden">
+        <!-- Top UI -->
+        <div class="top-ui">
+            <!-- Health Bar -->
+            <div class="ui-panel health-panel">
+                <div class="label">HP</div>
+                <div class="bar-container">
+                    <div id="healthBar" class="bar health-bar"></div>
+                </div>
+                <div id="healthText" class="value">100/100</div>
+            </div>
+
+            <!-- Experience Bar -->
+            <div class="ui-panel exp-panel">
+                <div class="label">LVL <span id="levelText">1</span></div>
+                <div class="bar-container">
+                    <div id="expBar" class="bar exp-bar"></div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="ui-panel stats-panel">
+                <div class="stat">⏱️ <span id="timeText">0:00</span></div>
+                <div class="stat">💀 <span id="killText">0</span></div>
+            </div>
+        </div>
+
+        <!-- Weapon Slots -->
+        <div class="weapon-slots">
+            <div id="weapon1" class="weapon-slot empty"></div>
+            <div id="weapon2" class="weapon-slot empty"></div>
+            <div id="weapon3" class="weapon-slot empty"></div>
+        </div>
+
+        <!-- Accessory Slots -->
+        <div class="accessory-slots">
+            <div id="accessory1" class="accessory-slot empty"></div>
+            <div id="accessory2" class="accessory-slot empty"></div>
+            <div id="accessory3" class="accessory-slot empty"></div>
+            <div id="accessory4" class="accessory-slot empty"></div>
+        </div>
+    </div>
+
+    <!-- Level Up Screen -->
+    <div id="levelUpScreen" class="screen hidden">
+        <div class="screen-content">
+            <h2 class="level-up-title">⬆️ LEVEL UP!</h2>
+            <p class="level-up-subtitle">Choose your upgrade</p>
+            <div id="upgradeOptions" class="upgrade-options">
+                <!-- Upgrade cards will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="screen hidden">
+        <div class="screen-content">
+            <h2 class="game-over-title">💀 GAME OVER</h2>
+            <div class="final-stats">
+                <p>Survival Time: <span id="finalTime">0:00</span></p>
+                <p>Enemies Killed: <span id="finalKills">0</span></p>
+                <p>Level Reached: <span id="finalLevel">1</span></p>
+            </div>
+            <button id="restartButton" class="btn-primary">RESTART</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/particles.js"></script>
+    <script src="js/weapons.js"></script>
+    <script src="js/enemies.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/game.js"></script>
+</body>
 </html>

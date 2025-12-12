@@ -1,0 +1,532 @@
+/* ===== CSS Reset & Base ===== */
+/* Clean, Modern Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    /* Modern System Fonts - Like a native app */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0a0a0f;
+    /* Deepest Purple/Black */
+    color: #ffffff;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* ===== Canvas ===== */
+#gameCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-color: #050510;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+}
+
+/* ===== Screen Overlays (Glassmorphism Modal) ===== */
+.screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    /* Subtle dimmer */
+    backdrop-filter: blur(10px);
+    z-index: 100;
+}
+
+.screen.hidden {
+    display: none !important;
+}
+
+.screen-content {
+    text-align: center;
+    padding: 48px;
+    width: 90%;
+    max-width: 500px;
+
+    /* Modern Glass Card */
+    background: rgba(30, 30, 45, 0.75);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 40px;
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+/* No Gothic Ornaments */
+.screen-content::after {
+    display: none;
+}
+
+/* ===== Typography ===== */
+.game-title {
+    font-size: 3.5rem;
+    font-weight: 800;
+    /* Extra Bold */
+    letter-spacing: -0.05em;
+    /* Tight tracking */
+    margin: 0;
+    background: linear-gradient(135deg, #fff 30%, #a688ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.1;
+}
+
+.game-subtitle {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+    margin-top: -16px;
+    letter-spacing: -0.02em;
+}
+
+/* ===== Buttons (Pill / Full Width) ===== */
+.btn-primary {
+    appearance: none;
+    background: linear-gradient(135deg, #6200ea 0%, #7c4dff 100%);
+    border: none;
+    border-radius: 24px;
+    /* Pill shape */
+    color: #fff;
+    padding: 20px 0;
+    width: 100%;
+    font-size: 1.2rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(98, 0, 234, 0.3);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+    letter-spacing: -0.02em;
+}
+
+.btn-primary:active {
+    transform: scale(0.96);
+    box-shadow: 0 4px 10px rgba(98, 0, 234, 0.2);
+}
+
+.btn-primary:hover {
+    filter: brightness(1.1);
+}
+
+/* ===== Controls Info ===== */
+.controls-info {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* ===== Game UI (Minimalist HUD) ===== */
+#gameUI {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+    padding: 24px;
+    /* Safe area padding */
+}
+
+.top-ui {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    width: 100%;
+    align-items: stretch;
+}
+
+/* Floating Islands for UI */
+.ui-panel {
+    background: rgba(20, 20, 30, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 48px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.health-panel {
+    min-width: 280px;
+    flex-grow: 0;
+}
+
+.exp-panel {
+    flex-grow: 1;
+}
+
+.stats-panel {
+    justify-content: center;
+    min-width: 120px;
+}
+
+.label {
+    display: none;
+    /* Hide labels for minimalism, keep visuals */
+}
+
+/* Modern Bars */
+.bar-container {
+    flex: 1;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    border: none;
+}
+
+.bar {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.3s ease-out;
+}
+
+.health-bar {
+    background: linear-gradient(90deg, #ff4d4d, #ff8080);
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.4);
+}
+
+.exp-bar {
+    background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+    box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);
+}
+
+#healthText,
+#levelText,
+#timeText,
+#killText {
+    font-weight: 700;
+    font-size: 1rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+#levelText::before {
+    content: 'LV ';
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8em;
+}
+
+#killText::after {
+    content: ' Kills';
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8em;
+    font-weight: 500;
+}
+
+/* Slots */
+.weapon-slots,
+.accessory-slots {
+    position: absolute;
+    bottom: 32px;
+    display: flex;
+    gap: 12px;
+}
+
+.weapon-slots {
+    left: 32px;
+}
+
+.accessory-slots {
+    right: 32px;
+}
+
+.weapon-slot,
+.accessory-slot {
+    width: 56px;
+    height: 56px;
+    background: rgba(20, 20, 30, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    /* Smooth corners */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.weapon-slot:not(.empty),
+.accessory-slot:not(.empty) {
+    background: rgba(40, 40, 60, 0.8);
+    border-color: rgba(100, 100, 255, 0.3);
+}
+
+/* ===== Level Up Screen (Vertical List) ===== */
+#upgradeOptions {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    margin-top: 24px;
+    pointer-events: auto;
+}
+
+/* Level Up Title */
+.level-up-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 8px;
+    letter-spacing: -0.04em;
+    background: linear-gradient(to right, #ffffff, #e0e0e0);
+    -webkit-background-clip: text;
+}
+
+.level-up-subtitle {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
+}
+
+.upgrade-card {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    /* Extremely subtle fill */
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    text-align: left;
+    height: 90px;
+    position: relative;
+}
+
+.upgrade-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-4px) scale(1.01);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.upgrade-icon-container {
+    width: 56px;
+    height: 56px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 16px;
+    margin-right: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.upgrade-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+}
+
+.upgrade-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+}
+
+.upgrade-description {
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.3;
+}
+
+.upgrade-new-badge {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: #ff0055;
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(255, 0, 85, 0.4);
+    transform: none;
+    /* Reset rotation */
+    border: none;
+}
+
+.upgrade-debuff {
+    font-size: 0.75rem;
+    color: #ff4d4d;
+    margin-top: 4px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ===== Minimalist Icon Graphics (CSS Only) ===== */
+.icon-graphic {
+    /* Base styles */
+    position: relative;
+    border-radius: 4px;
+    /* Default slightly rounded */
+}
+
+/* Smooth transformations for icons */
+/* Missile: Rounded Arrow head */
+.icon-missile {
+    background: #ff4d4d;
+    width: 12px;
+    height: 24px;
+    border-radius: 6px;
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.5);
+}
+
+/* Laser: Thin beam with glow */
+.icon-laser {
+    background: #00e5ff;
+    width: 4px;
+    height: 32px;
+    border-radius: 2px;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.8);
+    transform: rotate(45deg);
+}
+
+/* Homing: Radar Circle */
+.icon-homing {
+    border: 3px solid #d500f9;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    box-shadow: 0 0 10px rgba(213, 0, 249, 0.4);
+}
+
+.icon-homing::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    background: #d500f9;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Plasma: Glowing Orb */
+.icon-plasma {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #ffd740, #ff6d00);
+    box-shadow: 0 0 15px rgba(255, 109, 0, 0.5);
+}
+
+/* Drone: Floating Square */
+.icon-drone {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    /* Smooth rect */
+    background: #00e676;
+    transform: rotate(15deg);
+    box-shadow: 0 4px 10px rgba(0, 230, 118, 0.4);
+}
+
+/* Stats Icons - Minimalist Symbols */
+.icon-speed {
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 20px solid #ffeb3b;
+    /* Triangle up */
+    border-radius: 2px;
+    filter: drop-shadow(0 0 5px rgba(255, 235, 59, 0.5));
+}
+
+.icon-health {
+    background: #ff1744;
+    width: 20px;
+    height: 20px;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2m-7 14h-2v-4H6v-2h4V7h2v4h4v2h-4v4z'/%3E%3C/svg%3E");
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2m-7 14h-2v-4H6v-2h4V7h2v4h4v2h-4v4z'/%3E%3C/svg%3E");
+    mask-repeat: no-repeat;
+    mask-position: center;
+    background-color: #ff1744;
+    /* Fallback for mask */
+    /* Alternative pure css shield/plus */
+    border-radius: 4px;
+}
+
+/* Mobile Optimization */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+    .screen-content {
+        padding: 24px;
+        max-width: 80%;
+    }
+
+    .game-title {
+        font-size: 2.5rem;
+    }
+
+    .btn-primary {
+        padding: 14px 0;
+        font-size: 1rem;
+        border-radius: 18px;
+    }
+
+    #upgradeOptions {
+        gap: 10px;
+        margin-top: 16px;
+    }
+
+    .upgrade-card {
+        height: 72px;
+        padding: 12px;
+    }
+
+    .upgrade-icon-container {
+        width: 40px;
+        height: 40px;
+        margin-right: 12px;
+    }
+
+    .upgrade-name {
+        font-size: 0.95rem;
+    }
+
+    .upgrade-description {
+        font-size: 0.75rem;
+    }
+}
