@@ -23,7 +23,8 @@ const camera = {
     x: 0,
     y: 0,
     width: 0,
-    height: 0
+    height: 0,
+    scale: 0.6 // Zoom level (smaller = further away)
 };
 
 // Game Entities
@@ -56,8 +57,8 @@ let meteorTimer = 0;
 function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    camera.width = canvas.width;
-    camera.height = canvas.height;
+    camera.width = canvas.width / camera.scale;
+    camera.height = canvas.height / camera.scale;
 }
 window.addEventListener('resize', resize);
 resize();
@@ -144,7 +145,8 @@ function initGame() {
     particles = new ParticleSystem();
 
     gameTime = 0;
-    spawnRate = 2;
+    gameTime = 0;
+    spawnRate = 0.5; // Much faster initial spawn (was 2)
     difficultyMultiplier = 1;
     bossTimer = 0;
     blackHoleTimer = 0;
@@ -284,6 +286,13 @@ function update(dt) {
     if (nextSpawnTime <= 0) {
         // Double spawn count for swarm effect
         spawnEnemy();
+        // Double spawn count for swarm effect
+        spawnEnemy();
+        // Constant pressure
+        if (enemies.length < 20) {
+            spawnEnemy();
+            spawnEnemy();
+        }
         if (Math.random() < 0.5) spawnEnemy();
 
         // Spawn rate accelerates faster
@@ -559,6 +568,8 @@ function draw() {
 
     ctx.save();
     // Apply Camera Transform
+    // Apply Camera Transform with Zoom
+    ctx.scale(camera.scale, camera.scale);
     ctx.translate(-camera.x, -camera.y);
 
     drawBackground(ctx);
