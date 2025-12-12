@@ -65,107 +65,85 @@ class Player {
         ctx.save();
         ctx.translate(this.x, this.y);
 
-        // 1. Engine Trails (High-Tech Plasma)
+        // Animation: "Bouncing/Breathing" effect
+        const bounce = 1 + Math.sin(this.engineFrame * 0.5) * 0.05;
+        ctx.scale(bounce, 1 / bounce);
+
+        // 1. Engine (Cute puff)
         if (this.vx !== 0 || this.vy !== 0) {
             const angle = Math.atan2(this.vy, this.vx);
-
             ctx.save();
-            ctx.rotate(angle + Math.PI); // Point backwards
+            ctx.rotate(angle + Math.PI);
+            ctx.translate(12, 0);
 
-            // Dual Engine Trails
-            const trailLen = 25 + Math.sin(this.engineFrame * 2) * 5;
-            const yOffsets = [-8, 8];
+            // Pop effect trails
+            ctx.fillStyle = '#fff';
+            ctx.globalAlpha = 0.6;
+            const puffSize = 6 + Math.sin(this.engineFrame * 2) * 3;
+            ctx.beginPath();
+            ctx.arc(0, 0, puffSize, 0, Math.PI * 2);
+            ctx.fill();
 
-            yOffsets.forEach(yOff => {
-                ctx.beginPath();
-                ctx.translate(15, yOff);
-                const grad = ctx.createLinearGradient(0, 0, trailLen, 0);
-                grad.addColorStop(0, 'rgba(255, 150, 0, 0.8)'); // Orange Core
-                grad.addColorStop(1, 'rgba(255, 50, 0, 0)');   // Fade out
-
-                ctx.fillStyle = grad;
-                ctx.moveTo(0, -3);
-                ctx.lineTo(trailLen, 0);
-                ctx.lineTo(0, 3);
-                ctx.fill();
-                ctx.translate(-15, -yOff);
-            });
+            ctx.fillStyle = '#00e5ff'; // Cyan glow
+            ctx.beginPath();
+            ctx.arc(5, 0, 4, 0, Math.PI * 2);
+            ctx.fill();
 
             ctx.restore();
         }
 
-        // 2. Ship Body (Sleek Sci-Fi)
+        // 2. Body (Cute Round Bot)
         ctx.save();
-        // Calculate detailed rotation (banking effect visible in structure)
-        let dirAngle = this.rotation;
-        if (this.vx !== 0 || this.vy !== 0) {
-            dirAngle = Math.atan2(this.vy, this.vx);
-        }
-        ctx.rotate(dirAngle);
+        // Slight tilt
+        ctx.rotate(this.vx * 0.001);
 
-        // Main Hull (Arrowhead shape)
+        // Main Shell (Bright Yellow)
+        const grad = ctx.createRadialGradient(-5, -5, 0, 0, 0, this.radius);
+        grad.addColorStop(0, '#fff59d'); // Light Yellow
+        grad.addColorStop(1, '#ffea00'); // Pop Yellow
+
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+
         ctx.beginPath();
-        ctx.moveTo(25, 0);   // Nose
-        ctx.lineTo(-15, 15); // Rear Left
-        ctx.lineTo(-10, 0);  // Rear Center indent
-        ctx.lineTo(-15, -15);// Rear Right
-        ctx.closePath();
-
-        // Hull Gradient (Silver/White)
-        const hullGrad = ctx.createLinearGradient(10, -10, -10, 10);
-        hullGrad.addColorStop(0, '#ffffff');
-        hullGrad.addColorStop(0.5, '#d0d0e0');
-        hullGrad.addColorStop(1, '#a0a0b0');
-
-        ctx.fillStyle = hullGrad;
+        // Egg shape
+        ctx.ellipse(0, 0, this.radius, this.radius * 0.9, 0, 0, Math.PI * 2);
         ctx.fill();
-
-        // Panel Lines / Details
-        ctx.strokeStyle = '#505060';
-        ctx.lineWidth = 1;
-        ctx.stroke(); // Outline
-
-        // Inner detailed lines
-        ctx.beginPath();
-        ctx.moveTo(5, 0);
-        ctx.lineTo(-10, 8);
-        ctx.moveTo(5, 0);
-        ctx.lineTo(-10, -8);
         ctx.stroke();
 
-        // Cockpit (Dark Glass)
-        ctx.fillStyle = '#111122';
+        // Face/Visor (Cyan Glass)
+        ctx.fillStyle = '#00e5ff';
         ctx.beginPath();
-        ctx.ellipse(0, 0, 8, 4, 0, 0, Math.PI * 2);
+        // Wide cute visor
+        ctx.ellipse(0, -2, this.radius * 0.7, this.radius * 0.5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Cockpit Glare
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        // Eyes (Digital)
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = 0.9;
+        // Left Eye
         ctx.beginPath();
-        ctx.ellipse(2, -1, 3, 1.5, -0.2, 0, Math.PI * 2);
+        ctx.ellipse(-8, -4, 4, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Right Eye
+        ctx.beginPath();
+        ctx.ellipse(8, -4, 4, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Engine Glows (Rear)
-        ctx.fillStyle = '#ffaa00';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#ffaa00';
+        // Antenna
         ctx.beginPath();
-        ctx.arc(-12, 8, 3, 0, Math.PI * 2);
-        ctx.arc(-12, -8, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0; // Reset
-
-        // 3. Direction/Targeting Laser (Subtle forward line)
-        // Helps aiming
-        /*
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        ctx.moveTo(25, 0);
-        ctx.lineTo(100, 0);
+        ctx.moveTo(0, -this.radius * 0.8);
+        ctx.lineTo(0, -this.radius * 1.5);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.setLineDash([]);
-        */
+
+        // Antenna Ball
+        ctx.fillStyle = '#ff1744'; // Red tip
+        ctx.beginPath();
+        ctx.arc(0, -this.radius * 1.5, 3, 0, Math.PI * 2);
+        ctx.fill();
 
         ctx.restore();
         ctx.restore();

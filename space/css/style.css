@@ -17,10 +17,14 @@ body {
     overflow: hidden;
     width: 100vw;
     height: 100vh;
+    /* Fallback */
+    height: 100dvh;
+    /* Mobile Viewport Fix */
     position: fixed;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* ===== Canvas ===== */
@@ -91,6 +95,7 @@ body {
     margin: 0;
     background: linear-gradient(135deg, #fff 30%, #a688ff 100%);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
     line-height: 1.1;
 }
@@ -304,6 +309,8 @@ body {
     letter-spacing: -0.04em;
     background: linear-gradient(to right, #ffffff, #e0e0e0);
     -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .level-up-subtitle {
@@ -370,14 +377,14 @@ body {
 
 .upgrade-new-badge {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 10px;
+    right: 10px;
     background: #ff0055;
     color: #fff;
-    font-size: 0.6rem;
+    font-size: 0.5rem;
     font-weight: 800;
-    padding: 4px 8px;
-    border-radius: 12px;
+    padding: 2px 6px;
+    border-radius: 8px;
     box-shadow: 0 2px 8px rgba(255, 0, 85, 0.4);
     transform: none;
     /* Reset rotation */
@@ -528,5 +535,62 @@ body {
 
     .upgrade-description {
         font-size: 0.75rem;
+    }
+}
+
+/* Mobile Portrait / Small Screen Fixes */
+@media screen and (max-width: 600px) {
+
+    /* Top UI Fixes */
+    .top-ui {
+        gap: 8px;
+    }
+
+    .health-panel {
+        min-width: auto;
+        width: 100%;
+        margin-bottom: 4px;
+        order: -1;
+        /* Force top */
+    }
+
+    .exp-panel {
+        width: 65%;
+        flex-grow: 1;
+    }
+
+    .stats-panel {
+        width: 30%;
+        min-width: unset;
+        justify-content: space-around;
+        padding: 8px;
+    }
+
+    /* Slots Fixes - Stacked Center */
+    .weapon-slots,
+    .accessory-slots {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        width: max-content;
+        gap: 8px;
+        bottom: auto;
+        /* Reset */
+    }
+
+    .weapon-slots {
+        bottom: 90px;
+    }
+
+    .accessory-slots {
+        bottom: 24px;
+        right: auto;
+    }
+
+    .weapon-slot,
+    .accessory-slot {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
     }
 }

@@ -179,8 +179,11 @@ function spawnEnemy() {
     let type = 'BASIC';
     const rand = Math.random();
 
-    if (gameTime > 60 && rand < 0.3) type = 'FAST';
-    if (gameTime > 120 && rand < 0.1) type = 'TANK';
+    if (gameTime > 30 && rand < 0.2) type = 'SPLITTER';
+    else if (gameTime > 60 && rand < 0.3) type = 'FAST';
+    else if (gameTime > 90 && rand < 0.15) type = 'ORBITER';
+    else if (gameTime > 120 && rand < 0.1) type = 'TANK';
+    else if (gameTime > 150 && rand < 0.1) type = 'DASHER';
 
     enemies.push(new Enemy(spawnX, spawnY, type));
 }
@@ -279,8 +282,12 @@ function update(dt) {
     // Spawning logic
     nextSpawnTime -= dt;
     if (nextSpawnTime <= 0) {
+        // Double spawn count for swarm effect
         spawnEnemy();
-        nextSpawnTime = spawnRate / Math.sqrt(difficultyMultiplier);
+        if (Math.random() < 0.5) spawnEnemy();
+
+        // Spawn rate accelerates faster
+        nextSpawnTime = (spawnRate / Math.sqrt(difficultyMultiplier)) * 0.8;
     }
 
     // Random boss spawn logic
@@ -290,6 +297,8 @@ function update(dt) {
             spawnBoss();
         }
         bossTimer = 0;
+        // Boss Wave: Spawn minions with boss
+        for (let i = 0; i < 5; i++) spawnEnemy();
     }
 
     // Black hole logic
@@ -304,9 +313,16 @@ function update(dt) {
     // Meteor logic
     meteorTimer -= dt;
     if (meteorTimer <= 0) {
+        // Meteor shower chance
         spawnMeteor();
-        meteorTimer = random(5, 10); // Every 5-10 seconds
+        if (Math.random() < 0.3) setTimeout(spawnMeteor, 500);
+
+        meteorTimer = random(5, 10);
     }
+
+    // Background Update (Parallax)
+    // No explicit update needed for simple drawing based on camera, 
+    // but if we had animated planets we'd update them here.
 
     // Update Entities
     player.update(dt, input.x, input.y);
@@ -341,6 +357,16 @@ function update(dt) {
                         player.kills++;
                         // Drop EXP gem
                         pickups.push(new ExpGem(enemy.x, enemy.y, enemy.expValue));
+
+                        // SPLITTER Logic: Spawn children
+                        if (enemy.type === 'SPLITTER') {
+                            for (let k = 0; k < 2; k++) {
+                                const child = new Enemy(enemy.x + random(-10, 10), enemy.y + random(-10, 10), 'FAST');
+                                child.health *= 0.5; // Weaker children
+                                child.radius *= 0.7;
+                                enemies.push(child);
+                            }
+                        }
 
                         // Drop Health ONLY from Bosses
                         if (enemy.type === 'BOSS') {
@@ -415,63 +441,132 @@ function update(dt) {
     updateUI(player, gameTime);
 }
 
-function draw() {
-    // Clear background (UI layer clear handled by browser often, but good to fill)
-    ctx.fillStyle = '#050510'; // Deep space blue/black
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+// Background Assets
+const PLANETS = [
+    { x: 500, y: 500, r: 200, color: '#332244', rings: true },
+    { x: 2500, y: 800, r: 350, color: '#442222', type: 'gas' },
+    { x: 1500, y: 2000, r: 150, color: '#224455', moons: 2 },
+    { x: 300, y: 2500, r: 100, color: '#555522', crater: true }
+];
 
-    ctx.save();
-    // Apply Camera Transform
-    ctx.translate(-camera.x, -camera.y);
+const NEBULAS = [
+    { x: 1500, y: 1500, r: 1000, color: 'rgba(100, 0, 255, 0.05)' },
+    { x: 500, y: 2000, r: 800, color: 'rgba(255, 0, 100, 0.05)' }
+];
 
-    // Draw Background Grid (World Coordinates)
-    // Draw only visible grid
-    const gridSize = 100;
+function drawBackground(ctx) {
+    // 1. Deep Space Background
+    ctx.fillStyle = '#0a0a12'; // Slightly richer dark
+    ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
+
+    // 2. Parallax Stars (Distant)
+    // We simulate parallax by shifting stars based on camera pos * factor
+    // But since this is a 2D top-down world, usually background is fixed to world.
+
+    // Let's implement "Fixed World Background" first to give sense of location.
+
+    // Draw Nebulas (World coordinates)
+    NEBULAS.forEach(neb => {
+        const grad = ctx.createRadialGradient(neb.x, neb.y, 0, neb.x, neb.y, neb.r);
+        grad.addColorStop(0, neb.color);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(neb.x, neb.y, neb.r, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Draw Planets (World coordinates)
+    PLANETS.forEach(p => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+
+        // Planet Body
+        const grad = ctx.createRadialGradient(-p.r * 0.3, -p.r * 0.3, 0, 0, 0, p.r);
+        grad.addColorStop(0, p.color);
+        grad.addColorStop(1, '#000');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Details
+        if (p.rings) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 20;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, p.r * 1.5, p.r * 0.4, -0.5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    });
+
+    // 3. Grid (World coordinates)
+    const gridSize = 200;
     const startX = Math.floor(camera.x / gridSize) * gridSize;
     const startY = Math.floor(camera.y / gridSize) * gridSize;
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
     ctx.lineWidth = 1;
 
     for (let x = startX; x < camera.x + camera.width + gridSize; x += gridSize) {
         ctx.beginPath();
         ctx.moveTo(x, camera.y);
-        ctx.lineTo(x, camera.y + camera.height + 100);
+        ctx.lineTo(x, camera.y + camera.height);
         ctx.stroke();
     }
     for (let y = startY; y < camera.y + camera.height + gridSize; y += gridSize) {
         ctx.beginPath();
         ctx.moveTo(camera.x, y);
-        ctx.lineTo(camera.x + camera.width + 100, y);
+        ctx.lineTo(camera.x + camera.width, y);
         ctx.stroke();
     }
 
-    // Draw Stars (Parallax ideally, but static for now for world feeling)
-    // We can use a deterministic random for stars based on world pos
-    // Or just simple scattered stars
-    // Let's draw some 'constellations'
+    // 4. Stars (World Coordinates - Scattered)
+    // To be efficient, we generate them deterministically based on grid cells or just draw a few fixed ones
+    // For 3000x3000, we can iterate just visible area too.
+    // Let's use a simple deterministic random for visible grid cells
+
     ctx.fillStyle = '#fff';
-    // Optimization: Draw stars only in view? No, just draw fixed stars for the whole world 
-    // but that's expensive 3000x3000px.
-    // Better: Draw a repeated star pattern or procedurally generated
+    const starGrid = 300; // Large cells
+    const sX = Math.floor(camera.x / starGrid) * starGrid;
+    const sY = Math.floor(camera.y / starGrid) * starGrid;
 
-    // Simple fast approach: Draw random stars based on camera coordinate hashing or just tile it
-    // Actually, let's keep it simple: Draw 100 random stars in the viewport
-    // But then they move with the camera (stuck to screen). That's bad.
-    // We want them stuck to the world.
+    for (let x = sX; x < camera.x + camera.width + starGrid; x += starGrid) {
+        for (let y = sY; y < camera.y + camera.height + starGrid; y += starGrid) {
+            // Pseudo-random based on coord
+            const seed = (x * 73856093) ^ (y * 19349663);
+            const rX = x + (seed % starGrid);
+            const rY = y + ((seed * 7) % starGrid);
 
-    const seed = 12345;
-    const starDensity = 0.0002;
-    // Visbile area optimization
-    /* 
-       For "constellation" feel, we can just draw some big distinct stars at fixed world coordinates.
-       We can pre-generate them or just define them.
-    */
+            const absSeed = Math.abs(seed);
+            const size = (absSeed % 3) + 1;
+
+            ctx.globalAlpha = 0.3 + ((absSeed % 10) / 20); // 0.3 - 0.8
+            ctx.beginPath();
+            ctx.arc(rX, rY, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    ctx.globalAlpha = 1;
+}
+
+function draw() {
+    // Clear handled by filling background
+    // ctx.fillStyle = '#050510'; 
+    // ctx.fillRect(0, 0, canvas.width, canvas.height); // Camera view clear
+
+    ctx.save();
+    // Apply Camera Transform
+    ctx.translate(-camera.x, -camera.y);
+
+    drawBackground(ctx);
 
     // Draw World Boundaries
     ctx.strokeStyle = '#ff0044'; // Bright Red/Pink Neon
-    ctx.lineWidth = 8;
-    ctx.shadowBlur = 20;
+    ctx.lineWidth = 4;
+    ctx.shadowBlur = 10;
     ctx.shadowColor = '#ff0044';
     ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     ctx.shadowBlur = 0; // Reset

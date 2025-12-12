@@ -1,4 +1,73 @@
+
 // ===== Enemy System =====
+
+// Enemy type definitions
+const ENEMY_TYPES = {
+    BASIC: {
+        health: 45,
+        speed: 90,
+        damage: 10,
+        radius: 15,
+        color: '#ff0055', // Neon Red
+        expValue: 5
+    },
+    FAST: {
+        health: 30,
+        speed: 170,
+        damage: 8,
+        radius: 12,
+        color: '#00ccff', // Neon Blue
+        expValue: 8
+    },
+    TANK: {
+        health: 150,
+        speed: 60,
+        damage: 20,
+        radius: 25,
+        color: '#ffaa00', // Neon Orange
+        expValue: 15
+    },
+    SPLITTER: {
+        health: 60,
+        speed: 100,
+        damage: 12,
+        radius: 20,
+        color: '#bd00ff', // Neon Purple
+        expValue: 10
+    },
+    ORBITER: {
+        health: 50,
+        speed: 120, // Orbit speed
+        damage: 15,
+        radius: 14,
+        color: '#00ff9d', // Neon Mint
+        expValue: 12
+    },
+    DASHER: {
+        health: 80,
+        speed: 50, // Base speed (charge is faster)
+        damage: 25,
+        radius: 18,
+        color: '#ffea00', // Neon Yellow
+        expValue: 14
+    },
+    BOSS: {
+        health: 1500, // Massive HP
+        speed: 70,
+        damage: 30,
+        radius: 50,
+        color: '#ff00ff', // Neon Magenta
+        expValue: 100
+    },
+    METEOR: {
+        health: 80,
+        speed: 100,
+        damage: 15,
+        radius: 30,
+        color: '#888',
+        expValue: 2
+    }
+};
 
 class Enemy {
     constructor(x, y, type) {
@@ -21,32 +90,86 @@ class Enemy {
         // Animation
         this.rotation = 0;
         this.wobble = Math.random() * Math.PI * 2;
+
+        // AI State
+        this.stateTimer = 0;
+        this.aiState = 0;
     }
 
     update(dt, player) {
         // Move towards player (except meteor)
-        if (this.type !== 'METEOR') {
-            const dx = player.x - this.x;
-            const dy = player.y - this.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist > 0) {
-                this.vx = (dx / dist) * this.speed;
-                this.vy = (dy / dist) * this.speed;
-            }
-        } else {
-            // Meteor just moves straight
+        if (this.type === 'METEOR') {
             this.x += this.vx * dt;
             this.y += this.vy * dt;
             this.rotation += dt;
             return;
         }
 
-        // Soft collision between enemies to prevent stacking
-        // (Simplified flocking)
-        // Note: For performance, this is often skipped or simplified in JS canvas games with many entities,
-        // but adding a wobble helps it feel organic.
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
+        if (this.type === 'ORBITER') {
+            // Orbiter AI: Maintain specific distance and circle
+            const orbitDist = 200;
+            const approachSpeed = this.speed * 0.5;
+            const orbitSpeed = this.speed;
+
+            // Approach/Retreat to orbit distance
+            if (dist > orbitDist + 10) {
+                this.vx = (dx / dist) * approachSpeed;
+                this.vy = (dy / dist) * approachSpeed;
+            } else if (dist < orbitDist - 10) {
+                this.vx = -(dx / dist) * approachSpeed;
+                this.vy = -(dy / dist) * approachSpeed;
+            } else {
+                // Perfect distance, just orbit
+                // Tangent vector: (-dy, dx)
+                this.vx = (-dy / dist) * orbitSpeed;
+                this.vy = (dx / dist) * orbitSpeed;
+            }
+        }
+        else if (this.type === 'DASHER') {
+            // Dasher AI: Stop, Aim, Dash
+            this.stateTimer += dt;
+
+            if (this.aiState === 0) { // Approaching
+                if (dist < 250) {
+                    this.aiState = 1; // Prepare Dash
+                    this.stateTimer = 0;
+                    this.vx = 0;
+                    this.vy = 0;
+                } else {
+                    this.vx = (dx / dist) * this.speed;
+                    this.vy = (dy / dist) * this.speed;
+                }
+            } else if (this.aiState === 1) { // Aiming (Warning)
+                // Shake effect logic in draw?
+                if (this.stateTimer > 0.5) { // 0.5s aim
+                    this.aiState = 2; // Dashing
+                    this.stateTimer = 0;
+                    // Lock direction
+                    const speed = 600; // Dash speed
+                    this.vx = (dx / dist) * speed;
+                    this.vy = (dy / dist) * speed;
+                }
+            } else if (this.aiState === 2) { // Dashing
+                // Decelerate slightly or just go
+                if (this.stateTimer > 0.3) { // 0.3s dash
+                    this.aiState = 0; // Cooldown/Reset
+                    this.stateTimer = -1.0; // 1s cooldown
+                }
+            }
+        }
+        else {
+            // Standard AI (Basic, Fast, Tank, Splitter)
+            if (dist > 0) {
+                this.vx = (dx / dist) * this.speed;
+                this.vy = (dy / dist) * this.speed;
+            }
+        }
+
+        // Soft collision between enemies to prevent stacking (Flocking)
         this.x += this.vx * dt;
         this.y += this.vy * dt;
 
@@ -54,7 +177,12 @@ class Enemy {
         if (this.vx !== 0 || this.vy !== 0) {
             const targetAngle = Math.atan2(this.vy, this.vx);
             // Smooth rotation
-            this.rotation = targetAngle; // Instant for now
+            let angleDiff = targetAngle - this.rotation;
+            // Normalize angle
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            this.rotation += angleDiff * 10 * dt;
         }
 
         this.wobble += dt * 5;
@@ -75,13 +203,16 @@ class Enemy {
             if (this.type === 'BASIC') this.drawBasic(ctx);
             else if (this.type === 'FAST') this.drawFast(ctx);
             else if (this.type === 'TANK') this.drawTank(ctx);
+            else if (this.type === 'SPLITTER') this.drawSplitter(ctx);
+            else if (this.type === 'ORBITER') this.drawOrbiter(ctx);
+            else if (this.type === 'DASHER') this.drawDasher(ctx);
 
             // Health bar if damaged
             if (this.health < this.maxHealth) {
                 ctx.rotate(-this.rotation); // Keep bar horizontal
                 const barWidth = this.radius * 2;
-                const barHeight = 3;
-                const barY = -this.radius - 10;
+                const barHeight = 4;
+                const barY = -this.radius - 12;
 
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
                 ctx.fillRect(-barWidth / 2, barY, barWidth, barHeight);
@@ -99,7 +230,7 @@ class Enemy {
         // Triangle shape
         ctx.fillStyle = this.color;
         ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
 
         ctx.beginPath();
         ctx.moveTo(this.radius, 0);
@@ -109,19 +240,13 @@ class Enemy {
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-
-        // Glow core
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(0, 0, 3, 0, Math.PI * 2);
-        ctx.fill();
     }
 
     drawFast(ctx) {
         // Needle/Dart shape
         ctx.fillStyle = this.color;
         ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
 
         ctx.beginPath();
         ctx.moveTo(this.radius * 1.5, 0);
@@ -129,13 +254,6 @@ class Enemy {
         ctx.lineTo(-this.radius, -this.radius * 0.4);
         ctx.closePath();
         ctx.fill();
-        ctx.stroke();
-
-        // Engine trails
-        ctx.strokeStyle = this.color;
-        ctx.beginPath();
-        ctx.moveTo(-this.radius, 0);
-        ctx.lineTo(-this.radius * 2, 0);
         ctx.stroke();
     }
 
@@ -157,12 +275,65 @@ class Enemy {
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
+    }
 
-        // Inner detail
-        ctx.fillStyle = '#330000';
+    drawSplitter(ctx) {
+        // Two spheres connected
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+
+        // Wobble effect
+        const offset = Math.sin(this.wobble) * 3;
+
         ctx.beginPath();
-        ctx.arc(0, 0, this.radius * 0.5, 0, Math.PI * 2);
+        ctx.arc(0, -5 + offset, this.radius * 0.6, 0, Math.PI * 2);
+        ctx.arc(0, 5 - offset, this.radius * 0.6, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
+    }
+
+    drawOrbiter(ctx) {
+        // Satellite shape
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Ring
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.radius, this.radius * 0.3, this.wobble, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    drawDasher(ctx) {
+        // Spiky shape
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+
+        if (this.aiState === 1) { // Warning
+            ctx.strokeStyle = '#ff0000';
+            ctx.fillStyle = '#ffaaaa';
+        }
+
+        ctx.beginPath();
+        const spikes = 5;
+        for (let i = 0; i < spikes * 2; i++) {
+            const r = (i % 2 === 0) ? this.radius : this.radius * 0.4;
+            const a = (i / (spikes * 2)) * Math.PI * 2;
+            const x = Math.cos(a) * r;
+            const y = Math.sin(a) * r;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
     }
 
     drawMeteor(ctx) {
@@ -172,18 +343,7 @@ class Enemy {
         ctx.lineWidth = 2;
 
         ctx.beginPath();
-        // Determine shape roughly based on "random" but deterministic for same instance not really possible here without seed
-        // We'll just draw a generic rough circle
-        const segments = 8;
-        for (let i = 0; i < segments; i++) {
-            const angle = (i / segments) * Math.PI * 2;
-            const r = this.radius * (0.8 + Math.sin(angle * 3 + this.x) * 0.2); // Pseudo-random shape based on position
-            const x = Math.cos(angle) * r;
-            const y = Math.sin(angle) * r;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
@@ -307,50 +467,6 @@ class Boss extends Enemy {
     }
 }
 
-// Enemy type definitions
-const ENEMY_TYPES = {
-    BASIC: {
-        health: 30,
-        speed: 80,
-        damage: 10,
-        radius: 15,
-        color: '#ff0055', // Neon Red
-        expValue: 5
-    },
-    FAST: {
-        health: 20,
-        speed: 150,
-        damage: 8,
-        radius: 12,
-        color: '#00ccff', // Neon Blue
-        expValue: 8
-    },
-    TANK: {
-        health: 100,
-        speed: 50,
-        damage: 20,
-        radius: 25,
-        color: '#ffaa00', // Neon Orange
-        expValue: 15
-    },
-    BOSS: {
-        health: 500,
-        speed: 60,
-        damage: 30,
-        radius: 50,
-        color: '#ff00ff', // Neon Magenta
-        expValue: 100
-    },
-    METEOR: {
-        health: 50,
-        speed: 100,
-        damage: 15,
-        radius: 30,
-        color: '#888',
-        expValue: 2
-    }
-};
-
 // Experience gem
 class ExpGem {
     constructor(x, y, value) {
@@ -368,7 +484,7 @@ class ExpGem {
         const dist = distance(this.x, this.y, player.x, player.y);
 
         // Magnetic pull towards player
-        if (dist < this.magnetRange + (player.pickupRange || 0)) { // Use player stats
+        if (dist < this.magnetRange + (player.pickupRange || 0)) {
             const dx = player.x - this.x;
             const dy = player.y - this.y;
             const speed = 400; // Strong pull
@@ -388,7 +504,7 @@ class ExpGem {
 
     draw(ctx) {
         ctx.save();
-        ctx.translate(this.x, this.y + Math.sin(this.wobble) * 3); // Float animation
+        ctx.translate(this.x, this.y + Math.sin(this.wobble) * 3);
 
         // Gem glow
         const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius);
