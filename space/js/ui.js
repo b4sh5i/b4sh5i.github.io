@@ -159,7 +159,30 @@ function generateUpgradeOptions(player) {
         );
 
         if (availableWeapons.length > 0) {
-            const weaponKey = randomChoice(availableWeapons);
+            // Weighted Random Selection
+            const weights = {
+                'PULSE': 0.3, // Lower chance for Pulse
+                'default': 1.0
+            };
+
+            let totalWeight = 0;
+            const weightedList = availableWeapons.map(key => {
+                const weight = weights[key] || weights['default'];
+                totalWeight += weight;
+                return { key, weight };
+            });
+
+            let randomValue = Math.random() * totalWeight;
+            let weaponKey = availableWeapons[0];
+
+            for (const item of weightedList) {
+                randomValue -= item.weight;
+                if (randomValue <= 0) {
+                    weaponKey = item.key;
+                    break;
+                }
+            }
+
             const weapon = WEAPONS[weaponKey];
             options.push({
                 category: 'weapon',

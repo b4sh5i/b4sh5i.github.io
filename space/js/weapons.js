@@ -86,8 +86,8 @@ class Laser extends Projectile {
 
         // Laser beam
         ctx.strokeStyle = '#00ffff';
-        ctx.lineWidth = 4;
-        ctx.shadowBlur = 10;
+        ctx.lineWidth = 10; // Wider beam
+        ctx.shadowBlur = 15;
         ctx.shadowColor = '#00ffff';
         ctx.beginPath();
         ctx.moveTo(-this.length / 2, 0);
@@ -172,7 +172,7 @@ class PlasmaBall extends Projectile {
     constructor(x, y, angle, speed, damage, owner) {
         super(x, y, angle, speed, damage, owner);
         this.radius = 15;
-        this.explosionRadius = 40;
+        this.explosionRadius = 120; // Increased from 40 for better visibility
     }
 
     draw(ctx) {
@@ -282,9 +282,10 @@ const WEAPONS = {
         icon: '🚀',
         description: '전방으로 미사일을 발사합니다',
         cooldown: 0.5,
-        damage: 20,
+        damage: 25,
         projectileClass: Missile,
-        speed: 400
+        speed: 450,
+        explosionRadius: 60 // Added AoE
     },
     LASER: {
         name: '레이저 빔',
@@ -293,25 +294,30 @@ const WEAPONS = {
         cooldown: 0.3,
         damage: 15,
         projectileClass: Laser,
-        speed: 600
+        speed: 800,
+        pierce: 999 // Infinite pierce
     },
     HOMING: {
         name: '유도 미사일',
         icon: '🎯',
-        description: '적을 추적하는 미사일',
-        cooldown: 0.8,
-        damage: 30,
+        description: '적을 추적하는 미사일 3발을 발사합니다',
+        cooldown: 0.9, // Slightly longer cooldown for balance
+        damage: 15, // Damage per missile (3x15 = 45 total potential)
         projectileClass: HomingMissile,
-        speed: 300
+        spread: 0.2, // Spread in radians
+        speed: 350,
+        explosionRadius: 40 // Miniature AoE
     },
-    PLASMA: {
-        name: '플라즈마 캐논',
-        icon: '💥',
-        description: '광역 피해를 주는 플라즈마 구체',
+    PULSE: {
+        name: '펄스 노바',
+        icon: '⭕',
+        description: '주변의 적들을 밀쳐내고 피해를 줍니다',
         cooldown: 1.0,
-        damage: 40,
-        projectileClass: PlasmaBall,
-        speed: 250
+        damage: 80,
+        projectileClass: PlasmaBall, // Reuse PlasmaBall visual
+        speed: 0, // Stationary (Pulse)
+        explosionRadius: 200, // Large Melee Area
+        life: 0.2 // Instant burst
     },
     DRONE: {
         name: '공격 드론',

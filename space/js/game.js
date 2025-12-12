@@ -166,6 +166,27 @@ function initGame() {
     requestAnimationFrame(gameLoop);
 }
 
+function handleEnemyDeath(enemy) {
+    player.kills++;
+    // Drop EXP gem
+    pickups.push(new ExpGem(enemy.x, enemy.y, enemy.expValue));
+
+    // SPLITTER Logic: Spawn children
+    if (enemy.type === 'SPLITTER') {
+        for (let k = 0; k < 2; k++) {
+            const child = new Enemy(enemy.x + random(-10, 10), enemy.y + random(-10, 10), 'FAST');
+            child.health *= 0.5; // Weaker children
+            child.radius *= 0.7;
+            enemies.push(child);
+        }
+    }
+
+    // Drop Health ONLY from Bosses
+    if (enemy.type === 'BOSS') {
+        pickups.push(new HealthPickup(enemy.x, enemy.y));
+    }
+}
+
 function spawnEnemy() {
     // Spawn somewhat near player but sufficiently far
     const angle = random(0, Math.PI * 2);
@@ -359,28 +380,24 @@ function update(dt) {
                 if (circleCollision(p.x, p.y, p.radius, enemy.x, enemy.y, enemy.radius)) {
                     // Hit!
                     p.hit();
-                    const dead = enemy.takeDamage(p.damage);
-                    particles.explosion(p.x, p.y, p.color || '#fff');
 
-                    if (dead) {
-                        player.kills++;
-                        // Drop EXP gem
-                        pickups.push(new ExpGem(enemy.x, enemy.y, enemy.expValue));
+                    // Check for AoE (Area of Effect)
+                    if (p.explosionRadius) {
+                        // Explosion visual removed as requested
+                        // particles.explosion(p.x, p.y, p.color || '#ff00ff', p.explosionRadius / 20);
 
-                        // SPLITTER Logic: Spawn children
-                        if (enemy.type === 'SPLITTER') {
-                            for (let k = 0; k < 2; k++) {
-                                const child = new Enemy(enemy.x + random(-10, 10), enemy.y + random(-10, 10), 'FAST');
-                                child.health *= 0.5; // Weaker children
-                                child.radius *= 0.7;
-                                enemies.push(child);
+                        // AoE Damage
+                        for (const target of enemies) {
+                            if (distance(p.x, p.y, target.x, target.y) <= p.explosionRadius) {
+                                const dead = target.takeDamage(p.damage); // Full damage or falloff? Full for now.
+                                if (dead) handleEnemyDeath(target);
                             }
                         }
-
-                        // Drop Health ONLY from Bosses
-                        if (enemy.type === 'BOSS') {
-                            pickups.push(new HealthPickup(enemy.x, enemy.y));
-                        }
+                    } else {
+                        // Single target hit
+                        const dead = enemy.takeDamage(p.damage);
+                        particles.explosion(p.x, p.y, p.color || '#fff');
+                        if (dead) handleEnemyDeath(enemy);
                     }
 
                     if (p.isDead()) break;

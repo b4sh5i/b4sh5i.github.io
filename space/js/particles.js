@@ -67,14 +67,14 @@ class ParticleSystem {
     }
 
     // Explosion effect
-    explosion(x, y, color = '#ff6b6b') {
-        this.emit(x, y, 20, {
+    explosion(x, y, color = '#ff6b6b', scale = 1) {
+        this.emit(x, y, 20 * scale, {
             color,
-            minSize: 2,
-            maxSize: 6,
-            minSpeed: 100,
-            maxSpeed: 300,
-            life: 0.8
+            minSize: 2 * scale,
+            maxSize: 6 * scale,
+            minSpeed: 100 * scale,
+            maxSpeed: 300 * scale,
+            life: 0.8 * scale
         });
     }
 

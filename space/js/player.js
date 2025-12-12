@@ -145,6 +145,9 @@ class Player {
         ctx.arc(0, -this.radius * 1.5, 3, 0, Math.PI * 2);
         ctx.fill();
 
+        // Drones
+        this.drones.forEach(drone => drone.draw(ctx));
+
         ctx.restore();
         ctx.restore();
     }
@@ -260,15 +263,25 @@ class Player {
             targetAngle = Math.random() * Math.PI * 2;
         }
 
-        const ProjectileClass = weapon.projectileClass;
-        projectiles.push(new ProjectileClass(
-            this.x,
-            this.y,
-            targetAngle,
-            weapon.speed,
-            weapon.damage,
-            'player'
-        ));
+        const angleSpread = weapon.spread || 0;
+        const count = weapon.count || 1;
+
+        // Calculate start angle for spread (centered around targetAngle)
+        const startAngle = targetAngle - ((count - 1) * angleSpread) / 2;
+
+        for (let i = 0; i < count; i++) {
+            const currentAngle = startAngle + (i * angleSpread);
+
+            const ProjectileClass = weapon.projectileClass;
+            projectiles.push(new ProjectileClass(
+                this.x,
+                this.y,
+                currentAngle,
+                weapon.speed,
+                weapon.damage,
+                'player'
+            ));
+        }
     }
 
     updateCooldowns(dt) {
