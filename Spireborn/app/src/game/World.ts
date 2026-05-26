@@ -43,6 +43,10 @@ export class World {
     vy: 0,
     invuln: 0, // 피격 후 무적 시간 (초)
     flash: 0,
+    // 캐릭터가 바라보는 방향 (라디안). 이동 중이면 입력 방향, 정지면 최근 타겟 방향.
+    facing: 0,
+    // 걸음 진행 (애니메이션용)
+    stepPhase: 0,
   };
 
   // 다음 자동 발동 타이밍
@@ -187,10 +191,24 @@ export class World {
 
     // 플레이어 이동
     const ps = this.build.player;
+    const moveMag = Math.hypot(this.inputX, this.inputY);
     this.player.x += this.inputX * ps.moveSpeed * dt;
     this.player.y += this.inputY * ps.moveSpeed * dt;
     if (this.player.invuln > 0) this.player.invuln -= dt;
     if (this.player.flash > 0) this.player.flash -= dt;
+
+    // 바라보는 방향 — 이동 중이면 진행 방향, 정지하면 최근 타겟쪽
+    if (moveMag > 0.05) {
+      this.player.facing = Math.atan2(this.inputY, this.inputX);
+      this.player.stepPhase += dt * 8 * moveMag;
+    } else {
+      const tgt = this.findNearestEnemy(600);
+      if (tgt) {
+        const dx = tgt.x - this.player.x;
+        const dy = tgt.y - this.player.y;
+        this.player.facing = Math.atan2(dy, dx);
+      }
+    }
 
     // 아레나 경계 안으로 클램프 — 플레이어 반경 14
     const playerR = 14;
@@ -201,9 +219,9 @@ export class World {
       this.player.y = (this.player.y / pd) * limit;
     }
 
-    // 카메라 — 아레나 중심 고정 (좁은 공간이라 흔들리지 않게)
-    this.cameraX = 0;
-    this.cameraY = 0;
+    // 카메라 — 플레이어 추적 (모바일에서 캐릭터가 화면 밖으로 나가지 않게 고정 뷰)
+    this.cameraX = this.player.x;
+    this.cameraY = this.player.y;
 
     // 시간 진행 / 보스 트리거
     this.run.floorElapsedSec += dt;

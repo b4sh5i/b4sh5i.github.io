@@ -1,15 +1,29 @@
 :root {
   color-scheme: dark;
-  --bg: #0a0a0f;
-  --panel: #14141c;
-  --panel-2: #1c1c28;
-  --line: #2a2a3a;
-  --text: #e8e8f0;
-  --muted: #8a8aa0;
-  --accent: #ffb347;
-  --accent-2: #4fc3f7;
-  --danger: #ff5577;
+  /* 다크 판타지 ARPG 팔레트 */
+  --bg: #050306;
+  --stone-1: #14101a;
+  --stone-2: #1d1726;
+  --stone-3: #2a2236;
+  --line: #3a2e44;
+  --line-hi: #5a4a6a;
+  --text: #ece4d0;
+  --muted: #8a8094;
+  --gold: #d4a64a;
+  --gold-bright: #f4d486;
+  --gold-dark: #7a5a1a;
+  --bronze: #8b6a2a;
+  --rune: #c8a4ff;
+  --blood: #b8243a;
+  --blood-bright: #e6334e;
+  --ember: #ff8c44;
+  --frost: #6cc8ff;
   --good: #6fe388;
+  --danger: #e6334e;
+  --accent: var(--gold);
+  --accent-2: var(--rune);
+  --panel: var(--stone-1);
+  --panel-2: var(--stone-2);
 }
 
 * {
@@ -24,9 +38,9 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background: #000;
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Cinzel', 'Times New Roman', 'Iowan Old Style', Georgia, serif;
   font-size: 14px;
   touch-action: none;
   user-select: none;
@@ -36,6 +50,8 @@ body {
 #app {
   position: fixed;
   inset: 0;
+  background:
+    radial-gradient(circle at 50% 40%, #1a0f1c 0%, #050306 60%, #000 100%);
 }
 
 canvas#game {
@@ -47,18 +63,20 @@ canvas#game {
   touch-action: none;
 }
 
+/* === HUD === */
 #hud {
   position: absolute;
-  top: env(safe-area-inset-top, 8px);
-  left: 8px;
-  right: 8px;
+  top: calc(env(safe-area-inset-top, 8px) + 8px);
+  left: 10px;
+  right: 10px;
   pointer-events: none;
   z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   font-size: 12px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.9);
+  letter-spacing: 0.05em;
 }
 
 .hud-row {
@@ -69,12 +87,16 @@ canvas#game {
 
 .bar {
   position: relative;
-  height: 8px;
+  height: 12px;
   flex: 1;
-  background: rgba(0, 0, 0, 0.55);
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  background: linear-gradient(180deg, #08060a, #1a1420);
+  border: 1px solid #000;
+  border-radius: 2px;
   overflow: hidden;
+  box-shadow:
+    0 0 0 1px var(--gold-dark),
+    inset 0 1px 2px rgba(0, 0, 0, 0.9),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .bar > .fill {
@@ -85,19 +107,35 @@ canvas#game {
 }
 
 .bar.hp > .fill {
-  background: linear-gradient(90deg, #ff4d6d, #ff7e5f);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 40%),
+    linear-gradient(90deg, #6a0a18, #c8253a 50%, #ff4860);
+  box-shadow: 0 0 8px rgba(230, 51, 78, 0.55);
 }
 
 .bar.xp > .fill {
-  background: linear-gradient(90deg, #4fc3f7, #82eefd);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 50%),
+    linear-gradient(90deg, #1f4a82, #4fc3f7);
 }
 
 .hud-label {
   min-width: 48px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--gold-bright);
 }
 
+.hud-label[data-hp-text],
+.hud-label[data-timer],
+.hud-label[data-kills] {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* === 오버레이 === */
 #overlay {
   position: absolute;
   inset: 0;
@@ -106,10 +144,12 @@ canvas#game {
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  padding: 18px 14px;
+  background:
+    radial-gradient(ellipse at center, rgba(40, 20, 50, 0.4), rgba(0, 0, 0, 0.85) 70%),
+    rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   overflow-y: auto;
 }
 
@@ -117,23 +157,64 @@ canvas#game {
   display: none;
 }
 
+/* 석조 패널 — 골드 더블 보더 + 코너 장식 */
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 16px;
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(212, 166, 74, 0.06), transparent 70%),
+    linear-gradient(180deg, #1c1626 0%, #100a18 100%);
+  border: 1px solid var(--gold-dark);
+  border-radius: 4px;
+  padding: 18px 16px 16px;
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  box-shadow:
+    0 0 0 1px #000 inset,
+    0 0 0 3px #1a1420 inset,
+    0 0 0 4px var(--gold-dark) inset,
+    0 0 30px rgba(0, 0, 0, 0.85),
+    0 0 40px rgba(212, 166, 74, 0.06);
+}
+
+/* 코너 장식 — pseudo elements */
+.panel::before,
+.panel::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--gold);
+  pointer-events: none;
+  opacity: 0.85;
+}
+.panel::before {
+  top: 6px;
+  left: 6px;
+  border-right: none;
+  border-bottom: none;
+}
+.panel::after {
+  bottom: 6px;
+  right: 6px;
+  border-left: none;
+  border-top: none;
 }
 
 .panel h2 {
   margin: 0 0 4px;
   font-size: 18px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+  text-shadow:
+    0 0 8px rgba(212, 166, 74, 0.35),
+    0 2px 2px rgba(0, 0, 0, 0.7);
+  border-bottom: 1px solid var(--gold-dark);
+  padding-bottom: 6px;
 }
 
 .panel p,
@@ -141,7 +222,8 @@ canvas#game {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 .choice-list {
@@ -154,23 +236,36 @@ canvas#game {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 12px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 12px 14px;
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.05), transparent 60%),
+    linear-gradient(180deg, #221a2c, #110a18);
+  border: 1px solid #000;
+  outline: 1px solid var(--line);
+  outline-offset: -2px;
+  border-radius: 3px;
   cursor: pointer;
   text-align: left;
   color: var(--text);
   font: inherit;
+  transition: outline-color 80ms ease, background 80ms ease;
+}
+
+.choice:hover {
+  outline-color: var(--gold-dark);
 }
 
 .choice:active {
-  background: #232336;
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.12), transparent 60%),
+    linear-gradient(180deg, #2a2238, #15101e);
 }
 
 .choice .name {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 14px;
+  letter-spacing: 0.04em;
+  color: var(--gold-bright);
 }
 
 .choice .name .tag {
@@ -178,47 +273,68 @@ canvas#game {
   margin-left: 6px;
   padding: 1px 6px;
   font-size: 10px;
-  border-radius: 4px;
-  background: rgba(255, 179, 71, 0.15);
-  color: var(--accent);
-  border: 1px solid rgba(255, 179, 71, 0.35);
-  letter-spacing: 0.04em;
+  border-radius: 2px;
+  background: rgba(212, 166, 74, 0.12);
+  color: var(--gold);
+  border: 1px solid var(--gold-dark);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   vertical-align: middle;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 .choice .name .tag.qual {
-  background: rgba(79, 195, 247, 0.12);
-  color: var(--accent-2);
-  border-color: rgba(79, 195, 247, 0.4);
+  background: rgba(200, 164, 255, 0.10);
+  color: var(--rune);
+  border-color: #5a4080;
 }
 
 .choice .desc {
   color: var(--muted);
   font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
+/* === 버튼 — 황금 양각 === */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 16px;
-  background: var(--accent);
-  color: #1a1208;
-  border: none;
-  border-radius: 8px;
+  padding: 11px 18px;
+  background:
+    linear-gradient(180deg, #f0c970 0%, #d4a64a 45%, #8b6a2a 100%);
+  color: #1a0f04;
+  border: 1px solid #000;
+  border-radius: 3px;
+  font-family: 'Cinzel', 'Times New Roman', serif;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 0 0 1px var(--gold-dark) inset,
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.3) inset,
+    0 2px 6px rgba(0, 0, 0, 0.55);
 }
 
 .btn.secondary {
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, #2a2236 0%, #1a1420 100%);
+  color: var(--gold-bright);
+  border: 1px solid var(--gold-dark);
+  text-shadow: 0 1px 0 #000;
+  box-shadow:
+    0 0 0 1px #000 inset,
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 2px 6px rgba(0, 0, 0, 0.6);
 }
 
 .btn:active {
-  filter: brightness(0.92);
+  filter: brightness(0.9);
+  transform: translateY(1px);
 }
 
 .row {
@@ -230,6 +346,7 @@ canvas#game {
   flex: 1;
 }
 
+/* === 조이스틱 === */
 #joystick {
   position: absolute;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
@@ -248,8 +365,13 @@ canvas#game {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(212, 166, 74, 0.08), transparent 60%),
+    rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(212, 166, 74, 0.35);
+  box-shadow:
+    0 0 12px rgba(0, 0, 0, 0.6),
+    inset 0 0 16px rgba(0, 0, 0, 0.45);
 }
 
 #joystick-stick {
@@ -261,10 +383,15 @@ canvas#game {
   margin-left: -28px;
   margin-top: -28px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
-  border: 2px solid rgba(255, 255, 255, 0.35);
+  background:
+    radial-gradient(circle at 30% 30%, #f0c970, #8b6a2a 70%, #4a3a18);
+  border: 2px solid #000;
+  box-shadow:
+    0 0 0 1px var(--gold-dark) inset,
+    0 2px 6px rgba(0, 0, 0, 0.75);
 }
 
+/* === 정비 === */
 .maintenance-list {
   display: flex;
   flex-direction: column;
@@ -272,10 +399,14 @@ canvas#game {
 }
 
 .maintenance-item {
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.04), transparent 50%),
+    linear-gradient(180deg, #1c1626, #0e0816);
+  border: 1px solid #000;
+  outline: 1px solid var(--line);
+  outline-offset: -2px;
+  border-radius: 3px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -288,7 +419,9 @@ canvas#game {
 }
 
 .maintenance-item .head .name {
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--gold-bright);
+  letter-spacing: 0.05em;
 }
 
 .maintenance-item .stats {
@@ -303,6 +436,7 @@ canvas#game {
   gap: 8px;
   font-size: 12px;
   color: var(--muted);
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 .stat-row .label {
@@ -317,49 +451,66 @@ canvas#game {
 }
 
 .stat-row .btn-mini {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  font-size: 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  color: var(--text);
-  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(180deg, #2a2236, #14101a);
+  border: 1px solid #000;
+  outline: 1px solid var(--gold-dark);
+  outline-offset: -2px;
+  color: var(--gold-bright);
+  border-radius: 2px;
 }
 
 .stat-row .btn-mini:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
+  outline-color: var(--line);
+  color: var(--muted);
 }
 
 .points {
   display: inline-block;
   padding: 2px 6px;
   font-size: 11px;
-  background: rgba(111, 227, 136, 0.12);
+  background: rgba(111, 227, 136, 0.1);
   color: var(--good);
-  border: 1px solid rgba(111, 227, 136, 0.4);
-  border-radius: 4px;
-  letter-spacing: 0.04em;
+  border: 1px solid rgba(111, 227, 136, 0.35);
+  border-radius: 2px;
+  letter-spacing: 0.06em;
 }
 
+/* === 타이틀 === */
 .title-screen {
   text-align: center;
+  padding-top: 26px;
 }
 
 .title-screen h1 {
-  margin: 0;
-  font-size: 28px;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  text-shadow: 0 0 20px rgba(255, 179, 71, 0.4);
+  margin: 4px 0 6px;
+  font-size: 38px;
+  letter-spacing: 0.32em;
+  color: var(--gold-bright);
+  font-weight: 800;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 16px rgba(212, 166, 74, 0.55),
+    0 0 32px rgba(184, 36, 58, 0.25),
+    0 2px 0 #000;
+  background: linear-gradient(180deg, #f4d486 0%, #d4a64a 50%, #7a5a1a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .high-score {
   font-size: 12px;
   color: var(--muted);
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 .skill-grid {
@@ -373,36 +524,43 @@ canvas#game {
   flex-wrap: wrap;
   gap: 4px;
   font-size: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 .tag-row .chip {
-  padding: 1px 6px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 7px;
+  background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 2px;
   color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 .gameover h2 {
-  color: var(--danger);
+  color: var(--blood-bright);
+  text-shadow:
+    0 0 8px rgba(230, 51, 78, 0.45),
+    0 2px 2px rgba(0, 0, 0, 0.7);
 }
 
 .divider {
   height: 1px;
-  background: var(--line);
-  margin: 4px 0;
+  background: linear-gradient(90deg, transparent, var(--gold-dark), transparent);
+  margin: 6px 0;
 }
 
 .credit-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 3px 10px;
   font-size: 12px;
   font-weight: 700;
-  background: rgba(255, 216, 107, 0.14);
-  color: #ffd86b;
-  border: 1px solid rgba(255, 216, 107, 0.4);
-  border-radius: 4px;
-  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, rgba(244, 212, 134, 0.18), rgba(122, 90, 26, 0.1));
+  color: var(--gold-bright);
+  border: 1px solid var(--gold-dark);
+  border-radius: 2px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 1px #000;
 }
 
 /* === 룰렛 === */
@@ -415,25 +573,29 @@ canvas#game {
   margin: 4px auto;
   width: 100%;
   max-width: 320px;
-  height: 168px; /* 3 cells visible */
-  border-radius: 10px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
+  height: 168px;
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, #15101e, #08050d);
+  border: 1px solid #000;
+  outline: 1px solid var(--gold-dark);
+  outline-offset: -2px;
   overflow: hidden;
-  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    inset 0 0 60px rgba(0, 0, 0, 0.85),
+    0 0 16px rgba(0, 0, 0, 0.6);
 }
 
 .roulette-window {
   position: absolute;
   inset: 0;
-  /* 그라데이션 마스크: 위/아래 페이드아웃 */
   mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
 }
 
 .roulette-track {
   position: absolute;
-  top: 56px; /* 중앙 셀이 0 위치에 오도록 */
+  top: 56px;
   left: 0;
   right: 0;
   will-change: transform;
@@ -447,7 +609,8 @@ canvas#game {
   gap: 10px;
   font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text);
 }
 
@@ -456,7 +619,7 @@ canvas#game {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  box-shadow: 0 0 10px currentColor;
+  box-shadow: 0 0 12px currentColor;
 }
 
 .roulette-name {
@@ -470,11 +633,14 @@ canvas#game {
   top: 50%;
   height: 56px;
   margin-top: -28px;
-  border-top: 2px solid var(--accent);
-  border-bottom: 2px solid var(--accent);
+  border-top: 1px solid var(--gold);
+  border-bottom: 1px solid var(--gold);
   pointer-events: none;
-  background: rgba(255, 179, 71, 0.06);
-  box-shadow: 0 0 24px rgba(255, 179, 71, 0.18) inset;
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.08), rgba(212, 166, 74, 0.02) 50%, rgba(212, 166, 74, 0.08));
+  box-shadow:
+    0 0 18px rgba(212, 166, 74, 0.25) inset,
+    0 0 0 1px rgba(0, 0, 0, 0.6) inset;
   z-index: 1;
 }
 
@@ -491,8 +657,9 @@ canvas#game {
 }
 
 .roulette-result-name {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
-  letter-spacing: 0.05em;
-  text-shadow: 0 0 20px currentColor;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-shadow: 0 0 22px currentColor, 0 2px 2px #000;
 }
