@@ -1,0 +1,58 @@
+# Spireborn 자동 빌드 워크플로우.
+#
+# 상위 저장소가 Jekyll 기반 GitHub Pages 사이트이므로
+# Pages 자체의 source 설정은 그대로 두고(branch deploy),
+# 이 워크플로우가 Spireborn/app/ 의 소스를 빌드해 Spireborn/ 루트에
+# index.html + assets/ 를 직접 커밋한다.
+# Jekyll 이 그대로 서브경로로 서빙 → https://b4sh5i.github.io/Spireborn/
+
+name: Build Spireborn
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'Spireborn/app/**'
+      - '.github/workflows/spireborn.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: Spireborn/app/package-lock.json
+
+      - name: Install
+        working-directory: Spireborn/app
+        run: npm ci
+
+      # 이전 빌드 산출물 청소 — 해시가 다른 옛 자산이 남는 걸 방지
+      - name: Clean previous artifacts
+        run: |
+          rm -rf Spireborn/assets
+          rm -f  Spireborn/index.html
+
+      - name: Build
+        working-directory: Spireborn/app
+        run: npm run build
+
+      - name: Commit built artifacts
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Spireborn/index.html Spireborn/assets
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "chore(spireborn): rebuild [skip ci]"
+            git push
+          fi
