@@ -1,0 +1,314 @@
+:root {
+    --bg-color: #050510;
+    --panel-bg: rgba(10, 15, 30, 0.85);
+    --neon-blue: #00f3ff;
+    --neon-pink: #ff00ff;
+    --neon-green: #00ff41;
+    --neon-yellow: #fcee0a;
+    --neon-red: #ff3131;
+    --text-color: #e0e0e0;
+    --border-color: #333;
+
+    --font-main: 'Rajdhani', sans-serif;
+    --font-display: 'Orbitron', sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    user-select: none;
+    /* Prevent text selection during game */
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-main);
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.game-container {
+    width: 100%;
+    margin: 0;
+    max-width: 100%;
+    /* Mobile First: Vertical Layout */
+    display: flex;
+    flex-direction: column;
+    padding: 5px;
+    height: 100vh;
+}
+
+/* Canvas Responsive */
+canvas {
+    max-width: 100%;
+    max-height: 70vh;
+    /* Leave room for HUDs */
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    background: #000;
+}
+
+/* HUD Top */
+.hud-top {
+    display: flex;
+    justify-content: space-between;
+    background: var(--panel-bg);
+    padding: 10px 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.1);
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.stat-box .label {
+    font-size: 0.8em;
+    color: #888;
+    font-family: var(--font-display);
+}
+
+.stat-box .value {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--neon-blue);
+    text-shadow: 0 0 5px var(--neon-blue);
+}
+
+.stat-box.gold .value {
+    color: var(--neon-yellow);
+    text-shadow: 0 0 5px var(--neon-yellow);
+}
+
+.stat-box.silver .value {
+    color: var(--neon-green);
+    text-shadow: 0 0 5px var(--neon-green);
+}
+
+/* Game Area */
+.game-area {
+    flex: 1;
+    position: relative;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: radial-gradient(circle at center, #1a1a2e 0%, #050510 100%);
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+canvas {
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    cursor: crosshair;
+}
+
+/* Overlay Screens (Start & Game Over) */
+.overlay-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    z-index: 100;
+}
+
+.overlay-screen.hidden {
+    display: none;
+}
+
+.game-title {
+    font-family: var(--font-display);
+    font-size: 3em;
+    margin: 0;
+    background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+    line-height: 1.2;
+    text-shadow: 0 0 20px var(--neon-blue);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        filter: brightness(1);
+    }
+
+    50% {
+        opacity: 0.8;
+        filter: brightness(1.2);
+    }
+}
+
+.game-subtitle {
+    font-family: var(--font-main);
+    font-size: 1.3em;
+    color: var(--neon-yellow);
+    margin: 0;
+    text-shadow: 0 0 10px var(--neon-yellow);
+}
+
+#overlay-title {
+    font-family: var(--font-display);
+    font-size: 3em;
+    margin: 0 0 20px 0;
+    text-align: center;
+}
+
+/* HUD Bottom - Mobile Optimized */
+.hud-bottom {
+    height: auto;
+    /* Allow growth */
+    min-height: 120px;
+    display: flex;
+    flex-wrap: wrap;
+    /* Wrap on very small screens */
+    gap: 5px;
+}
+
+.hud-bottom .panel-section {
+    padding: 5px;
+}
+
+.panel-section {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+    flex: 1;
+}
+
+.panel-section h3 {
+    margin: 0 0 10px 0;
+    font-family: var(--font-display);
+    font-size: 1em;
+    color: var(--neon-pink);
+    border-bottom: 1px solid #333;
+    padding-bottom: 5px;
+}
+
+/* Action Panel (Summon) */
+.action-panel {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 0 0 250px;
+    /* Fixed width for main action */
+}
+
+.neon-btn {
+    background: transparent;
+    border: 2px solid var(--neon-blue);
+    color: var(--neon-blue);
+    font-family: var(--font-display);
+    padding: 10px 20px;
+    font-size: 1.2em;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-shadow: 0 0 5px var(--neon-blue);
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+}
+
+.neon-btn:hover {
+    background: rgba(0, 243, 255, 0.1);
+    box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+    transform: scale(1.02);
+}
+
+.neon-btn:active {
+    transform: scale(0.98);
+}
+
+.neon-btn .icon {
+    font-size: 1.5em;
+    margin-bottom: 5px;
+}
+
+.neon-btn .cost {
+    font-size: 0.7em;
+    margin-top: 5px;
+    color: var(--neon-yellow);
+}
+
+/* Upgrade Panel */
+.upgrade-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+}
+
+.upgrade-btn {
+    background: #111;
+    border: 1px solid #444;
+    color: #888;
+    padding: 5px;
+    cursor: pointer;
+    font-family: var(--font-main);
+    font-size: 0.9em;
+    transition: all 0.2s;
+}
+
+.upgrade-btn:hover {
+    border-color: var(--neon-green);
+    color: var(--neon-green);
+}
+
+/* Info Panel */
+/* Mission Icons */
+.mission-icons {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.mission-icon {
+    width: 30px;
+    height: 30px;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2em;
+    cursor: help;
+    transition: all 0.3s;
+}
+
+.mission-icon.done {
+    background: rgba(0, 255, 65, 0.2);
+    border-color: var(--neon-green);
+    color: var(--neon-green);
+    box-shadow: 0 0 10px var(--neon-green);
+}
