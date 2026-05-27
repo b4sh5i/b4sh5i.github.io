@@ -1,5 +1,5 @@
 // 풀링 대상 엔티티들의 단순한 데이터 클래스.
-import type { EnemyDef } from '../types';
+import type { DamageType, EnemyDef } from '../types';
 
 export class Enemy {
   active = false;
@@ -16,6 +16,10 @@ export class Enemy {
   knockY = 0;
   // 시각: 피격 플래시
   flash = 0;
+  // 한기/감전 시각 (PoE 식 ailment) — 데미지 X, 보여주기만.
+  // 한기는 cold 데미지 명중 시 부여, 감전은 lightning 데미지 명중 시 부여.
+  chillTime = 0;
+  shockTime = 0;
 }
 
 export class Projectile {
@@ -33,6 +37,10 @@ export class Projectile {
   radius = 6;
   life = 0; // 남은 수명 (초)
   color = '#ffb347';
+  // 데미지 타입 — Renderer 가 이 값에 따라 다른 형태로 그린다.
+  damageType: DamageType = 'physical';
+  // 회전 위상 (얼음 결정, 번개 지글거림 시드용)
+  spin = 0;
   // 생성한 스킬 상태 스냅샷에서 가져온 속성들
   explodeOnKill = false;
   explodeRadius = 0;
@@ -62,8 +70,13 @@ export class CreditOrb {
   attracted = false;
 }
 
-// 시각 효과 (폭발 같은 단발성)
-export type VfxKind = 'ring' | 'arc';
+// 시각 효과 (단발성)
+//  - ring: 원형 펄스 (오라/폭발)
+//  - arc: 부채꼴 검흔 (근접 슬래시)
+//  - muzzle: 시전 위치에서 짧고 강한 머즐 플래시
+//  - flash: 화면 전체 페이드 (보스 처치 화이트아웃 등)
+//  - rune: 캐스트 전 지면 마법진 / 시전 잔재
+export type VfxKind = 'ring' | 'arc' | 'muzzle' | 'flash' | 'rune';
 
 export class Vfx {
   active = false;
@@ -78,6 +91,10 @@ export class Vfx {
   // arc 전용 — 정면 각도(라디안) 및 부채꼴 폭(라디안)
   angle = 0;
   arcSpan = 0;
+  // 데미지 타입 — Renderer 가 폭발/오라/슬래시 형태를 타입별로 다르게 그릴 때 사용.
+  damageType: DamageType = 'physical';
+  // 추가 위상 (룬/지글거림용)
+  phase = 0;
 }
 
 // 데미지 숫자 띄우기

@@ -53,6 +53,8 @@ export interface AutoPickupHandle {
   collect: () => number;
 }
 
+type MaintenanceTab = 'skill' | 'equip' | 'shop' | 'reward';
+
 function autoPickupCost(run: RunState): number {
   return Math.max(0, Math.floor(run.floorCreditsEarned * AUTO_PICKUP_COST_RATIO));
 }
@@ -215,10 +217,34 @@ export class Overlay {
     // 같은 화톳불 안에서 액션 RNG (시드는 시간 기반 — 같은 정비 안에서 일관성)
     const rng = new RNG(randomSeed());
 
+    // 탭 상태 — 보상이 있으면 '보상' 탭부터 열어준다.
+    let activeTab: MaintenanceTab =
+      opts.itemRewards.length > 0 ? 'reward' : 'skill';
+
     const renderPanel = () => {
+      // 보상이 비면 활성 탭이 reward였더라도 자동으로 스킬로 이동.
+      if (activeTab === 'reward' && opts.itemRewards.length === 0) {
+        activeTab = 'skill';
+      }
       this.show(
-        this.maintenanceHtml(opts.run, opts.itemRewards, counter, opts.autoPickup),
-        (panel) =>
+        this.maintenanceHtml(
+          opts.run,
+          opts.itemRewards,
+          counter,
+          opts.autoPickup,
+          activeTab,
+        ),
+        (panel) => {
+          // 탭 전환
+          panel.querySelectorAll('[data-tab]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const t = (btn as HTMLElement).dataset.tab as MaintenanceTab;
+              if (t && t !== activeTab) {
+                activeTab = t;
+                renderPanel();
+              }
+            });
+          });
           this.wireMaintenance(
             panel,
             opts.run,
@@ -231,7 +257,8 @@ export class Overlay {
               renderPanel();
             },
             opts.onContinue,
-          ),
+          );
+        },
       );
     };
     renderPanel();
@@ -242,6 +269,7 @@ export class Overlay {
     itemRewards: ItemInstance[],
     counter: RerollCounter,
     autoPickup: AutoPickupHandle,
+    activeTab: MaintenanceTab,
   ): string {
     const linksCost = counter.cost('links', REROLL_LINKS_BASE);
     const gemBuyCost = counter.cost('gemBuy', GEM_BUY_BASE);
@@ -309,31 +337,68 @@ export class Overlay {
       </section>
     `;
 
+    // 탭 헤더 — 보상 탭은 보상이 있을 때만 표시.
+    const tab = (id: MaintenanceTab, label: string, badge?: string): string => {
+      const cls = ['tab-btn'];
+      if (id === activeTab) cls.push('active');
+      return `<button class="${cls.join(' ')}" data-tab="${id}">
+        <span class="tab-label">${label}</span>${badge ? `<span class="tab-badge">${badge}</span>` : ''}
+      </button>`;
+    };
+    const tabsHtml = `
+      <div class="tab-bar" role="tablist">
+        ${tab('skill', '스킬')}
+        ${tab('equip', '장비', `${run.items.length}/${MAX_EQUIPPED_ITEMS}`)}
+        ${tab('shop', '상점')}
+        ${hasRewards ? tab('reward', '보상', `${itemRewards.length}`) : ''}
+      </div>
+    `;
+
+    // 탭별 본문
+    let bodyHtml = '';
+    if (activeTab === 'skill') {
+      bodyHtml = `
+        <section class="tab-panel">
+          <h3>메인 스킬 — ${mainSkillDef.name}</h3>
+          ${socketsHtml}
+          ${socketDetailsHtml}
+          <h3>인벤토리 <span class="slot-count">${run.supports.length}/${MAX_INVENTORY}</span></h3>
+          ${inventoryHtml}
+        </section>
+      `;
+    } else if (activeTab === 'equip') {
+      bodyHtml = `
+        <section class="tab-panel">
+          <h3>장착 아이템 <span class="slot-count">${run.items.length}/${MAX_EQUIPPED_ITEMS}</span></h3>
+          ${itemsHtml}
+        </section>
+      `;
+    } else if (activeTab === 'shop') {
+      bodyHtml = `
+        <section class="tab-panel">
+          ${autoPickupHtml}
+          <h3>상점</h3>
+          ${shopGrid}
+        </section>
+      `;
+    } else if (activeTab === 'reward') {
+      bodyHtml = `
+        <section class="tab-panel">
+          <h3>보상 아이템 <span class="slot-count">${itemRewards.length}개</span></h3>
+          ${rewardsHtml || '<div class="muted">남은 보상이 없습니다.</div>'}
+        </section>
+      `;
+    }
+
     return `
       <div class="panel maintenance-panel">
         <div class="maintenance-header">
           <h2>정비 — 층 ${run.floor}</h2>
           <span class="credit-badge">${credits}c</span>
         </div>
-        <p class="muted">화톳불에서만 빌드 변경 가능. 옵션당 ${REFINE_COST_PER_POINT}c. 화톳불을 떠나면 리롤 비용이 리셋된다.</p>
-        ${autoPickupHtml}
-        <section class="shop-section">
-          <h3>상점</h3>
-          ${shopGrid}
-        </section>
-        <div class="maintenance-body">
-          <section class="maintenance-col">
-            <h3>메인 스킬 — ${mainSkillDef.name}</h3>
-            ${socketsHtml}
-            ${socketDetailsHtml}
-            <h3>인벤토리 <span class="slot-count">${run.supports.length}/${MAX_INVENTORY}</span></h3>
-            ${inventoryHtml}
-          </section>
-          <section class="maintenance-col">
-            <h3>장착 아이템 <span class="slot-count">${run.items.length}/${MAX_EQUIPPED_ITEMS}</span></h3>
-            ${itemsHtml}
-            ${rewardsHtml}
-          </section>
+        ${tabsHtml}
+        <div class="maintenance-body single">
+          ${bodyHtml}
         </div>
         <div class="maintenance-footer">
           <button class="btn" data-continue>다음 층으로 →</button>
@@ -521,7 +586,8 @@ export class Overlay {
         const slotLabel = SLOT_LABELS[item.slot];
         const modsHtml = this.itemModsHtml(item);
         return `
-          <button class="item-card choice-card" data-item-pick="${idx}" ${slotsFull ? 'disabled' : ''}>
+          <button class="item-card reward-card" data-item-pick="${idx}" ${slotsFull ? 'disabled' : ''}>
+            <span class="reward-ribbon">DROP</span>
             <div class="head">
               <div class="name">${escapeHtml(item.name)}</div>
               <div class="actions"><span class="muted">${slotLabel}</span></div>
@@ -532,12 +598,10 @@ export class Overlay {
       })
       .join('');
     return `
-      <div class="divider"></div>
-      <h3>보상 아이템</h3>
-      ${slotsFull ? '<div class="slot-warning">장착 슬롯 가득. 삭제 후 재시도.</div>' : ''}
+      ${slotsFull ? '<div class="slot-warning">장착 슬롯 가득. 장비 탭에서 삭제 후 재시도.</div>' : ''}
       <div class="item-card-list">
         ${cards}
-        <button class="choice" data-item-skip>건너뛰기</button>
+        <button class="choice" data-item-skip>모두 건너뛰기</button>
       </div>
       <div class="reroll-row">
         <button class="btn-reroll" data-item-reward-reroll ${canReroll ? '' : 'disabled'}>

@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  /* 다크 판타지 ARPG 팔레트 */
+  /* 다크 판타지 ARPG 팔레트 — 디아블로 + PoE 짬뽕 톤 */
   --bg: #050306;
   --stone-1: #14101a;
   --stone-2: #1d1726;
@@ -24,6 +24,13 @@
   --accent-2: var(--rune);
   --panel: var(--stone-1);
   --panel-2: var(--stone-2);
+
+  /* 폰트 스택 — 영문은 Cinzel(헤더)/Noto Serif KR 폴백. 한글은 Noto Serif KR.
+     본문은 가독성 우선으로 Noto Sans KR + 시스템 산세리프. */
+  --font-display: 'Cinzel', 'Noto Serif KR', 'Times New Roman', Georgia, serif;
+  --font-serif: 'Noto Serif KR', 'Cinzel', 'Times New Roman', Georgia, serif;
+  --font-body: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, system-ui,
+    'Apple SD Gothic Neo', sans-serif;
 }
 
 * {
@@ -40,11 +47,13 @@ body {
   overflow: hidden;
   background: #000;
   color: var(--text);
-  font-family: 'Cinzel', 'Times New Roman', 'Iowan Old Style', Georgia, serif;
+  font-family: var(--font-body);
   font-size: 14px;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
@@ -75,8 +84,9 @@ canvas#game {
   flex-direction: column;
   gap: 6px;
   font-size: 12px;
+  font-family: var(--font-body);
   text-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.9);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
 }
 
 .hud-row {
@@ -85,13 +95,22 @@ canvas#game {
   gap: 8px;
 }
 
+.hud-hp-row {
+  width: 100%;
+}
+
+.hud-chip-row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .bar {
   position: relative;
-  height: 12px;
+  height: 16px;
   flex: 1;
   background: linear-gradient(180deg, #08060a, #1a1420);
   border: 1px solid #000;
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
   box-shadow:
     0 0 0 1px var(--gold-dark),
@@ -119,20 +138,119 @@ canvas#game {
     linear-gradient(90deg, #1f4a82, #4fc3f7);
 }
 
-.hud-label {
-  min-width: 48px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.bar .bar-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-shadow:
+    0 1px 0 #000,
+    0 0 4px rgba(0, 0, 0, 0.95),
+    0 0 1px rgba(0, 0, 0, 1);
+  pointer-events: none;
+}
+
+.hud-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-body);
+  color: var(--text);
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.08), transparent 60%),
+    linear-gradient(180deg, #1c1626, #0e0816);
+  border: 1px solid #000;
+  outline: 1px solid var(--gold-dark);
+  outline-offset: -2px;
+  border-radius: 3px;
+  letter-spacing: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.65);
+}
+
+.hud-chip .chip-icon {
+  font-size: 11px;
+  color: var(--gold-bright);
+  line-height: 1;
+}
+
+.hud-chip .chip-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.hud-chip.credit-chip {
+  background:
+    linear-gradient(180deg, rgba(244, 212, 134, 0.18), rgba(122, 90, 26, 0.08));
   color: var(--gold-bright);
 }
 
-.hud-label[data-hp-text],
-.hud-label[data-timer],
-.hud-label[data-kills] {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
+.hud-chip.credit-chip .chip-icon {
+  color: #ffd86b;
+  text-shadow: 0 0 6px rgba(255, 216, 107, 0.6);
+}
+
+.hud-chip.timer-chip.boss {
+  outline-color: var(--blood-bright);
+  color: var(--blood-bright);
+  animation: hud-boss-pulse 0.9s ease-in-out infinite;
+}
+
+.hud-chip.timer-chip.boss .chip-icon {
+  color: var(--blood-bright);
+}
+
+.hud-chip.timer-chip.fire {
+  outline-color: var(--ember);
+  color: var(--ember);
+}
+
+.hud-chip.timer-chip.fire .chip-icon {
+  color: var(--ember);
+}
+
+.hud-chip.timer-chip.critical {
+  outline-color: var(--blood-bright);
+  color: var(--blood-bright);
+}
+
+@keyframes hud-boss-pulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 1px 2px rgba(0, 0, 0, 0.65),
+      0 0 0 0 rgba(230, 51, 78, 0.45);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 1px 2px rgba(0, 0, 0, 0.65),
+      0 0 14px 1px rgba(230, 51, 78, 0.55);
+  }
+}
+
+/* 매우 좁은 화면(아이폰 미니/SE 등)에서는 칩이 더 작게 */
+@media (max-width: 380px) {
+  .hud-chip {
+    padding: 2px 7px 2px 6px;
+    font-size: 11px;
+  }
+  .bar {
+    height: 14px;
+  }
+  .bar .bar-text {
+    font-size: 10px;
+  }
 }
 
 /* === 오버레이 === */
@@ -206,13 +324,14 @@ canvas#game {
 
 .panel h2 {
   margin: 0 0 4px;
-  font-size: 18px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 19px;
+  letter-spacing: 0.04em;
   color: var(--gold-bright);
+  font-family: var(--font-display);
+  font-weight: 700;
   text-shadow:
-    0 0 8px rgba(212, 166, 74, 0.35),
-    0 2px 2px rgba(0, 0, 0, 0.7);
+    0 0 10px rgba(212, 166, 74, 0.4),
+    0 2px 2px rgba(0, 0, 0, 0.85);
   border-bottom: 1px solid var(--gold-dark);
   padding-bottom: 6px;
 }
@@ -222,8 +341,9 @@ canvas#game {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.5;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  line-height: 1.55;
+  font-family: var(--font-body);
+  letter-spacing: 0;
 }
 
 .choice-list {
@@ -264,8 +384,9 @@ canvas#game {
 .choice .name {
   font-weight: 700;
   font-size: 14px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--gold-bright);
+  font-family: var(--font-serif);
 }
 
 .choice .name .tag {
@@ -277,10 +398,10 @@ canvas#game {
   background: rgba(212, 166, 74, 0.12);
   color: var(--gold);
   border: 1px solid var(--gold-dark);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   vertical-align: middle;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 .choice .name .tag.qual {
@@ -292,7 +413,8 @@ canvas#game {
 .choice .desc {
   color: var(--muted);
   font-size: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
+  line-height: 1.5;
 }
 
 /* === 버튼 — 황금 양각 === */
@@ -306,11 +428,10 @@ canvas#game {
   color: #1a0f04;
   border: 1px solid #000;
   border-radius: 3px;
-  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-family: var(--font-serif);
   font-weight: 700;
   font-size: 13px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   cursor: pointer;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
   box-shadow:
@@ -373,10 +494,9 @@ canvas#game {
   gap: 10px;
   padding: 10px 18px 10px 12px;
   font: inherit;
-  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-family: var(--font-serif);
   font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   font-size: 13px;
   background:
     linear-gradient(180deg, #f0c970 0%, #d4a64a 45%, #8b6a2a 100%);
@@ -404,13 +524,13 @@ canvas#game {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  background: rgba(0, 0, 0, 0.45);
+  letter-spacing: 0.02em;
+  background: rgba(0, 0, 0, 0.55);
   color: #f4d486;
-  border: 1px solid rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.7);
   border-radius: 3px;
   text-shadow: 0 1px 1px #000;
 }
@@ -466,7 +586,130 @@ canvas#game {
 
 /* === 정비 === */
 .maintenance-panel {
-  max-width: 880px;
+  max-width: 560px;
+}
+
+/* === 탭 === */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--gold-dark);
+  padding-bottom: 0;
+  margin-bottom: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 7px;
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.04), transparent 70%),
+    linear-gradient(180deg, #15101e, #0a0610);
+  border: 1px solid #000;
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  color: var(--muted);
+  font-family: var(--font-serif);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  outline: 1px solid var(--line);
+  outline-offset: -2px;
+}
+
+.tab-btn:not(.active):hover {
+  color: var(--text);
+}
+
+.tab-btn.active {
+  color: var(--gold-bright);
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.1), transparent 80%),
+    linear-gradient(180deg, #221a30, #100a18);
+  outline-color: var(--gold-dark);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 -2px 6px rgba(212, 166, 74, 0.15);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold-bright), transparent);
+  pointer-events: none;
+}
+
+.tab-btn .tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 5px;
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--gold-dark);
+  color: var(--gold-bright);
+}
+
+.tab-btn[data-tab="reward"] {
+  color: var(--rune);
+}
+
+.tab-btn[data-tab="reward"].active {
+  outline-color: var(--rune);
+  color: var(--rune);
+}
+
+.tab-btn[data-tab="reward"]::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rune);
+  box-shadow: 0 0 8px var(--rune);
+  animation: tab-pulse 1.2s ease-in-out infinite;
+}
+
+.tab-btn[data-tab="reward"].active::before {
+  display: none;
+}
+
+@keyframes tab-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.maintenance-body.single {
+  display: block;
 }
 
 .maintenance-header {
@@ -516,8 +759,8 @@ canvas#game {
 .slot-count {
   font-size: 11px;
   color: var(--muted);
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  letter-spacing: 0.06em;
+  font-family: var(--font-body);
+  letter-spacing: 0.02em;
   font-weight: 400;
   text-transform: none;
 }
@@ -548,11 +791,10 @@ canvas#game {
   outline: 1px solid #5a2030;
   outline-offset: -2px;
   border-radius: 2px;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   cursor: pointer;
 }
 
@@ -575,11 +817,10 @@ canvas#game {
   outline: 1px solid var(--gold-dark);
   outline-offset: -2px;
   border-radius: 2px;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   cursor: pointer;
 }
 
@@ -596,11 +837,11 @@ canvas#game {
 .slot-warning {
   font-size: 11px;
   color: var(--blood-bright);
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   padding: 6px 8px;
   border: 1px dashed rgba(230, 51, 78, 0.4);
   border-radius: 2px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .choice[disabled],
@@ -620,8 +861,9 @@ canvas#game {
   font-size: 12px;
   margin: 8px 0 4px;
   color: var(--gold-bright);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--font-display);
+  font-weight: 700;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -668,13 +910,13 @@ canvas#game {
 .autopickup-btn .autopickup-label {
   font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   color: var(--gold-bright);
-  text-transform: uppercase;
+  font-family: var(--font-serif);
 }
 
 .autopickup-btn .autopickup-cost {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 12px;
   font-weight: 700;
   color: #ffd86b;
@@ -685,10 +927,10 @@ canvas#game {
 }
 
 .autopickup-btn .autopickup-sub {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   color: var(--muted);
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   grid-column: 1 / span 2;
 }
 
@@ -697,8 +939,9 @@ canvas#game {
   font-size: 12px;
   margin: 0 0 6px;
   color: var(--gold-bright);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--font-display);
+  font-weight: 700;
 }
 
 .shop-grid {
@@ -745,21 +988,22 @@ canvas#game {
 .shop-btn .shop-label {
   font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   color: var(--gold-bright);
+  font-family: var(--font-serif);
 }
 
 .shop-btn .shop-cost {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 11px;
   color: var(--text);
 }
 
 .shop-btn .shop-sub {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 10px;
   color: var(--muted);
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 /* === 소켓 그리드 === */
@@ -809,7 +1053,7 @@ canvas#game {
   font-weight: 700;
   cursor: pointer;
   padding: 0;
-  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-family: var(--font-serif);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
@@ -823,10 +1067,10 @@ canvas#game {
 }
 
 .socket-label {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 9px;
   color: var(--muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .socket-link {
@@ -892,7 +1136,8 @@ canvas#game {
   font-weight: 700;
   color: var(--gold-bright);
   font-size: 12px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
+  font-family: var(--font-serif);
 }
 
 .socket-detail .head .actions {
@@ -905,9 +1150,8 @@ canvas#game {
   height: 22px;
   padding: 0 8px;
   font-size: 10px;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: var(--font-body);
+  letter-spacing: 0.02em;
   font-weight: 700;
 }
 
@@ -956,14 +1200,16 @@ canvas#game {
 .inv-gem .name {
   font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--gold-bright);
+  font-family: var(--font-serif);
 }
 
 .inv-gem .desc {
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 10.5px;
   color: var(--muted);
+  line-height: 1.45;
 }
 
 /* === 장착/보상 아이템 카드 === */
@@ -1015,8 +1261,9 @@ button.item-card:not(:disabled):active {
 .item-card .head .name {
   font-weight: 700;
   color: var(--gold-bright);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   font-size: 13px;
+  font-family: var(--font-serif);
 }
 
 .item-card .head .actions {
@@ -1029,7 +1276,7 @@ button.item-card:not(:disabled):active {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 .item-mod {
@@ -1073,10 +1320,11 @@ button.item-card:not(:disabled):active {
   border-radius: 2px;
   font-size: 9px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--line);
   color: var(--muted);
+  font-family: var(--font-body);
 }
 
 .item-mod .tier.T1 { color: #f4d486; border-color: var(--gold); background: rgba(212, 166, 74, 0.12); }
@@ -1087,7 +1335,7 @@ button.item-card:not(:disabled):active {
 
 .item-mod-empty {
   font-size: 11px;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 .item-shop {
@@ -1102,6 +1350,39 @@ button.item-card:not(:disabled):active {
 
 .choice-card {
   outline-color: var(--gold-dark);
+}
+
+.reward-card {
+  position: relative;
+  outline-color: var(--rune);
+  box-shadow:
+    inset 0 0 0 1px rgba(200, 164, 255, 0.08),
+    0 0 12px rgba(200, 164, 255, 0.18);
+}
+
+.reward-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(200, 164, 255, 0.06), transparent 60%);
+}
+
+.reward-card .reward-ribbon {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  padding: 1px 7px 2px;
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: linear-gradient(180deg, var(--rune), #6a4a9a);
+  color: #150a22;
+  border-radius: 0 0 3px 3px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+  z-index: 1;
 }
 
 .maintenance-item {
@@ -1127,7 +1408,8 @@ button.item-card:not(:disabled):active {
 .maintenance-item .head .name {
   font-weight: 700;
   color: var(--gold-bright);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
+  font-family: var(--font-serif);
 }
 
 .maintenance-item .stats {
@@ -1142,7 +1424,7 @@ button.item-card:not(:disabled):active {
   gap: 8px;
   font-size: 12px;
   color: var(--muted);
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 .stat-row .label {
@@ -1187,7 +1469,8 @@ button.item-card:not(:disabled):active {
   color: var(--good);
   border: 1px solid rgba(111, 227, 136, 0.35);
   border-radius: 2px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
+  font-family: var(--font-body);
 }
 
 /* === 타이틀 === */
@@ -1198,10 +1481,11 @@ button.item-card:not(:disabled):active {
 
 .title-screen h1 {
   margin: 4px 0 6px;
-  font-size: 38px;
-  letter-spacing: 0.32em;
+  font-size: 44px;
+  letter-spacing: 0.18em;
   color: var(--gold-bright);
-  font-weight: 800;
+  font-weight: 900;
+  font-family: var(--font-display);
   text-transform: uppercase;
   text-shadow:
     0 0 16px rgba(212, 166, 74, 0.55),
@@ -1216,7 +1500,7 @@ button.item-card:not(:disabled):active {
 .high-score {
   font-size: 12px;
   color: var(--muted);
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 .skill-grid {
@@ -1230,7 +1514,7 @@ button.item-card:not(:disabled):active {
   flex-wrap: wrap;
   gap: 4px;
   font-size: 10px;
-  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 .tag-row .chip {
@@ -1239,7 +1523,7 @@ button.item-card:not(:disabled):active {
   border: 1px solid var(--line);
   border-radius: 2px;
   color: var(--muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 .gameover h2 {
@@ -1264,9 +1548,10 @@ button.item-card:not(:disabled):active {
   color: var(--gold-bright);
   border: 1px solid var(--gold-dark);
   border-radius: 2px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--font-body);
   text-shadow: 0 1px 1px #000;
+  font-variant-numeric: tabular-nums;
 }
 
 /* === 룰렛 === */
@@ -1315,9 +1600,9 @@ button.item-card:not(:disabled):active {
   gap: 10px;
   font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--text);
+  font-family: var(--font-serif);
 }
 
 .roulette-dot {
@@ -1363,9 +1648,9 @@ button.item-card:not(:disabled):active {
 }
 
 .roulette-result-name {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-display);
   text-shadow: 0 0 22px currentColor, 0 2px 2px #000;
 }

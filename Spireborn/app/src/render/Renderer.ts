@@ -1,4 +1,4 @@
-// Canvas 2D 렌더러 — 다크 판타지 ARPG 톤.
+// Canvas 2D 렌더러 — 다크 판타지 ARPG 톤 (디아블로 + PoE 짬뽕).
 // 카메라는 항상 플레이어를 중심에 둔다. 화면 좌표 = (월드 - 카메라) * zoom + 화면중앙.
 import { World } from '../game/World';
 import { getSkill } from '../data/skills';
@@ -6,6 +6,12 @@ import { getSkill } from '../data/skills';
 // 색상 해시 — glow 캐시 키용 (정수 한 개로 충분)
 function colorHash(c: string): string {
   return c;
+}
+
+// 결정적 의사난수 — 위상/위치에서 안정된 형태 변형이 나오게.
+function hashSin(seed: number): number {
+  const s = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return s - Math.floor(s);
 }
 
 export class Renderer {
@@ -118,85 +124,26 @@ export class Renderer {
       });
     }
 
-    // 8) 투사체 — 다중 잔상 트레일 + 글로우 + 코어
+    // 8) 투사체 — 타입별 분기 (fire/cold/lightning/physical)
+    const projTime = performance.now() / 1000;
     world.projectiles.forEachActive((p) => {
-      // 5단계 트레일 잔상 (가까울수록 진함)
-      for (let i = 5; i >= 1; i--) {
-        const t = i / 5;
-        const dt = i * 0.012;
-        ctx.globalAlpha = 0.16 * (1 - t * 0.5);
-        this.drawGlow(
-          p.x - p.vx * dt,
-          p.y - p.vy * dt,
-          p.radius * (1.8 + (1 - t) * 1.8),
-          p.color,
-          0.5,
-        );
-      }
-      ctx.globalAlpha = 1;
-      // 본체 글로우
-      this.drawGlow(p.x, p.y, p.radius * 3.6, p.color, 0.7);
-      // 코어 — 흰색 핵
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius * 0.6, 0, Math.PI * 2);
-      ctx.fill();
+      this.drawProjectile(p, projTime);
     });
 
-    // 9) VFX — 링(오라/폭발) 또는 아크(근접 강타)
+    // 9) VFX — kind & damageType 별 분기
     world.vfx.forEachActive((v) => {
       const a = Math.max(0, v.life / v.maxLife);
       if (v.kind === 'arc') {
-        const half = v.arcSpan / 2;
-        const start = v.angle - half;
-        const end = v.angle + half;
-        // 1) 외곽 두꺼운 발광 (블러 느낌)
-        ctx.globalAlpha = a * 0.55;
-        ctx.strokeStyle = v.color;
-        ctx.lineWidth = 10;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.arc(v.x, v.y, v.radius, start, end);
-        ctx.stroke();
-        // 2) 부채꼴 채우기 (반투명)
-        ctx.globalAlpha = a * 0.38;
-        ctx.fillStyle = v.color;
-        ctx.beginPath();
-        ctx.moveTo(v.x, v.y);
-        ctx.arc(v.x, v.y, v.radius, start, end);
-        ctx.closePath();
-        ctx.fill();
-        // 3) 외곽 곡면 코어선
-        ctx.globalAlpha = a;
-        ctx.strokeStyle = v.color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(v.x, v.y, v.radius, start, end);
-        ctx.stroke();
-        // 4) 안쪽 흰 코어 검흔
-        ctx.globalAlpha = a * 0.9;
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.arc(v.x, v.y, v.radius * 0.96, start + 0.1, end - 0.1);
-        ctx.stroke();
-        ctx.lineCap = 'butt';
-        ctx.globalAlpha = 1;
+        this.drawArcVfx(v, a);
+      } else if (v.kind === 'muzzle') {
+        this.drawMuzzleVfx(v, a);
+      } else if (v.kind === 'rune') {
+        this.drawRuneVfx(v, a);
+      } else if (v.kind === 'flash') {
+        // 화면 전체 페이드 — render() 의 마지막 단계에서 스크린 공간으로 그림.
+        // 여기선 패스.
       } else {
-        // 바깥 글로우 링
-        ctx.globalAlpha = a * 0.5;
-        ctx.strokeStyle = v.color;
-        ctx.lineWidth = 6;
-        ctx.beginPath();
-        ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        // 내부 선명 링
-        ctx.globalAlpha = a;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+        this.drawRingVfx(v, a);
       }
     });
 
@@ -257,6 +204,392 @@ export class Renderer {
     v.addColorStop(1, 'rgba(0,0,0,0.85)');
     ctx.fillStyle = v;
     ctx.fillRect(0, 0, screenW, screenH);
+
+    // 13) 스크린 공간 화이트아웃/플래시 — 보스 처치 등.
+    //     남은 life 비율의 cubic out 으로 빠르게 사라짐.
+    world.vfx.forEachActive((vv) => {
+      if (vv.kind !== 'flash') return;
+      const t = Math.max(0, vv.life / vv.maxLife);
+      const ease = t * t;
+      const alpha = ease * 0.85;
+      const c = this.toRgba(vv.color, alpha);
+      ctx.fillStyle = c;
+      ctx.fillRect(0, 0, screenW, screenH);
+    });
+  }
+
+  // === 투사체 ===
+  // damageType 별 형태:
+  //   fire      — 일렁이는 코어 + 깃털 트레일
+  //   cold      — 회전하는 결정 (육각 별) + 차가운 트레일
+  //   lightning — jagged 지그재그 + 흰 코어
+  //   physical  — 본 글로우 + 흰 코어 (기존)
+  private drawProjectile(
+    p: import('../game/entities').Projectile,
+    time: number,
+  ): void {
+    const ctx = this.ctx;
+    const type = p.damageType;
+    const ang = Math.atan2(p.vy, p.vx);
+
+    if (type === 'lightning') {
+      // 트레일 — 짧은 지그재그 잔상
+      ctx.globalCompositeOperation = 'lighter';
+      const segLen = 10;
+      const segs = 5;
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 1.4;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      let px = p.x;
+      let py = p.y;
+      ctx.moveTo(px, py);
+      for (let i = 1; i <= segs; i++) {
+        const tt = i / segs;
+        const cx = p.x - p.vx * 0.012 * i;
+        const cy = p.y - p.vy * 0.012 * i;
+        const jitter = (hashSin(p.spin + i * 7.13 + Math.floor(time * 30)) - 0.5) * 6 * (1 - tt);
+        const nx = -p.vy;
+        const ny = p.vx;
+        const nl = Math.hypot(nx, ny) || 1;
+        px = cx + (nx / nl) * jitter;
+        py = cy + (ny / nl) * jitter;
+        ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      // 외곽 글로우
+      this.drawGlow(p.x, p.y, p.radius * 4, p.color, 0.9);
+      // 흰 코어
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      // 작은 십자 — 번개 코어 강조
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      const r = p.radius * 1.3;
+      ctx.beginPath();
+      ctx.moveTo(p.x - r, p.y);
+      ctx.lineTo(p.x + r, p.y);
+      ctx.moveTo(p.x, p.y - r);
+      ctx.lineTo(p.x, p.y + r);
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+      void segLen;
+    } else if (type === 'cold') {
+      // 트레일 — 옅은 푸른 잔상
+      for (let i = 4; i >= 1; i--) {
+        const tt = i / 4;
+        const ddt = i * 0.014;
+        ctx.globalAlpha = 0.18 * (1 - tt * 0.5);
+        this.drawGlow(
+          p.x - p.vx * ddt,
+          p.y - p.vy * ddt,
+          p.radius * (2 + (1 - tt) * 1.6),
+          p.color,
+          0.5,
+        );
+      }
+      ctx.globalAlpha = 1;
+      // 외곽 글로우
+      this.drawGlow(p.x, p.y, p.radius * 4, p.color, 0.7);
+      // 결정 — 회전하는 육각형
+      const rot = p.spin + time * 6;
+      this.drawCrystal(p.x, p.y, p.radius * 1.6, rot, p.color);
+    } else if (type === 'fire') {
+      // 트레일 — 깃털처럼 펄럭임
+      for (let i = 6; i >= 1; i--) {
+        const tt = i / 6;
+        const ddt = i * 0.014;
+        const wobble = Math.sin(time * 30 + p.spin + i) * 2;
+        const nx = -p.vy;
+        const ny = p.vx;
+        const nl = Math.hypot(nx, ny) || 1;
+        ctx.globalAlpha = 0.22 * (1 - tt * 0.5);
+        this.drawGlow(
+          p.x - p.vx * ddt + (nx / nl) * wobble,
+          p.y - p.vy * ddt + (ny / nl) * wobble,
+          p.radius * (2.2 + (1 - tt) * 2),
+          p.color,
+          0.65,
+        );
+      }
+      ctx.globalAlpha = 1;
+      // 외곽 큰 글로우 (불 후광)
+      this.drawGlow(p.x, p.y, p.radius * 4.5, p.color, 0.85);
+      // 노란 중심
+      this.drawGlow(p.x, p.y, p.radius * 2.2, '#ffd9a0', 0.7);
+      // 흰 코어
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // physical — 기존 톤 유지하되 약간 다듬음
+      for (let i = 5; i >= 1; i--) {
+        const tt = i / 5;
+        const ddt = i * 0.012;
+        ctx.globalAlpha = 0.16 * (1 - tt * 0.5);
+        this.drawGlow(
+          p.x - p.vx * ddt,
+          p.y - p.vy * ddt,
+          p.radius * (1.8 + (1 - tt) * 1.8),
+          p.color,
+          0.5,
+        );
+      }
+      ctx.globalAlpha = 1;
+      this.drawGlow(p.x, p.y, p.radius * 3.6, p.color, 0.7);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    void ang;
+  }
+
+  // 얼음 결정 — 회전하는 육각별. 두 개의 회전 사각형을 겹쳐 별 모양을 만듦.
+  private drawCrystal(x: number, y: number, r: number, rot: number, color: string): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    // 외곽 별
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 0.8;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a1 = (i / 6) * Math.PI * 2;
+      const a2 = a1 + Math.PI / 6;
+      const r1 = r;
+      const r2 = r * 0.45;
+      const x1 = Math.cos(a1) * r1;
+      const y1 = Math.sin(a1) * r1;
+      const x2 = Math.cos(a2) * r2;
+      const y2 = Math.sin(a2) * r2;
+      if (i === 0) ctx.moveTo(x1, y1);
+      else ctx.lineTo(x1, y1);
+      ctx.lineTo(x2, y2);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // 내부 흰 코어
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 부채꼴 검흔 — 타입에 따라 톤이 살짝 바뀜.
+  private drawArcVfx(v: import('../game/entities').Vfx, a: number): void {
+    const ctx = this.ctx;
+    const half = v.arcSpan / 2;
+    const start = v.angle - half;
+    const end = v.angle + half;
+    const isFire = v.damageType === 'fire';
+    const isCold = v.damageType === 'cold';
+    // 외곽 두꺼운 발광
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = a * 0.55;
+    ctx.strokeStyle = v.color;
+    ctx.lineWidth = isFire ? 12 : 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, v.radius, start, end);
+    ctx.stroke();
+    // 부채꼴 채우기 (반투명)
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = a * (isFire ? 0.44 : 0.38);
+    ctx.fillStyle = v.color;
+    ctx.beginPath();
+    ctx.moveTo(v.x, v.y);
+    ctx.arc(v.x, v.y, v.radius, start, end);
+    ctx.closePath();
+    ctx.fill();
+    // 외곽 곡면 코어선 — cold 면 점선 톤
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = v.color;
+    ctx.lineWidth = 2;
+    if (isCold) ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, v.radius, start, end);
+    ctx.stroke();
+    if (isCold) ctx.setLineDash([]);
+    // 안쪽 흰 코어 검흔
+    ctx.globalAlpha = a * 0.9;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, v.radius * 0.96, start + 0.1, end - 0.1);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.globalAlpha = 1;
+  }
+
+  // 펄스 링 — 오라/폭발. 타입별로 다중 링/지그재그 등 차별화.
+  private drawRingVfx(v: import('../game/entities').Vfx, a: number): void {
+    const ctx = this.ctx;
+    const type = v.damageType;
+    ctx.globalCompositeOperation = 'lighter';
+    if (type === 'lightning') {
+      // 들쭉날쭉한 지그재그 다각형 + 펄스
+      const sides = 24;
+      ctx.strokeStyle = v.color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      for (let i = 0; i <= sides; i++) {
+        const aa = (i / sides) * Math.PI * 2;
+        const jitter = hashSin(v.phase + i * 3.7) * 0.18 + 0.92;
+        const rr = v.radius * jitter;
+        const x = v.x + Math.cos(aa) * rr;
+        const y = v.y + Math.sin(aa) * rr;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // 외곽 글로우 링
+      ctx.globalAlpha = a * 0.5;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (type === 'cold') {
+      // 결정형 — 다각형 + 외곽 점선
+      ctx.strokeStyle = v.color;
+      ctx.lineWidth = 6;
+      ctx.globalAlpha = a * 0.5;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      // 내부 결정 다각형 (12면)
+      ctx.globalAlpha = a * 0.85;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      const sides = 12;
+      for (let i = 0; i <= sides; i++) {
+        const aa = (i / sides) * Math.PI * 2 + v.phase * 0.2;
+        const rr = v.radius * 0.96;
+        const x = v.x + Math.cos(aa) * rr;
+        const y = v.y + Math.sin(aa) * rr;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    } else if (type === 'fire') {
+      // 일렁임 — 두 겹 링 + 둘레 작은 결정 스파크
+      ctx.strokeStyle = v.color;
+      ctx.lineWidth = 7;
+      ctx.globalAlpha = a * 0.55;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffd9a0';
+      ctx.lineWidth = 1.6;
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, v.radius * 0.92, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      // physical — 기존 톤
+      ctx.globalAlpha = a * 0.5;
+      ctx.strokeStyle = v.color;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = a;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+
+  // 머즐 플래시 — 시전 위치에서 짧고 강한 발광.
+  private drawMuzzleVfx(v: import('../game/entities').Vfx, a: number): void {
+    const ctx = this.ctx;
+    const half = v.arcSpan / 2;
+    // 발광 콘 — 진행 방향으로 펼쳐진 부채꼴 외곽 빛
+    ctx.globalCompositeOperation = 'lighter';
+    const grad = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, v.maxRadius * (1.3 - a));
+    grad.addColorStop(0, this.toRgba('#ffffff', a * 0.95));
+    grad.addColorStop(0.3, this.toRgba(v.color, a * 0.7));
+    grad.addColorStop(1, this.toRgba(v.color, 0));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(v.x, v.y);
+    ctx.arc(v.x, v.y, v.maxRadius * 1.6, v.angle - half, v.angle + half);
+    ctx.closePath();
+    ctx.fill();
+    // 코어 흰 점
+    ctx.fillStyle = this.toRgba('#ffffff', a);
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, 3 + a * 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+
+  // 지면 룬 — 시전 잔재 (디아블로 스킬 시전 라인). 색·도형은 타입별.
+  private drawRuneVfx(v: import('../game/entities').Vfx, a: number): void {
+    const ctx = this.ctx;
+    const type = v.damageType;
+    ctx.save();
+    ctx.translate(v.x, v.y);
+    // 지면처럼 보이게 살짝 눌러 (Y 축 압축)
+    ctx.scale(1, 0.45);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = a * 0.7;
+    ctx.strokeStyle = v.color;
+    ctx.lineWidth = 1.8;
+    if (type === 'cold') {
+      // 결정형 12각형
+      ctx.beginPath();
+      const sides = 12;
+      for (let i = 0; i <= sides; i++) {
+        const aa = (i / sides) * Math.PI * 2 + v.phase;
+        const rr = v.radius;
+        const x = Math.cos(aa) * rr;
+        const y = Math.sin(aa) * rr;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    } else if (type === 'lightning') {
+      // 5각 별
+      ctx.beginPath();
+      for (let i = 0; i <= 10; i++) {
+        const aa = (i / 10) * Math.PI * 2 + v.phase;
+        const rr = v.radius * (i % 2 === 0 ? 1 : 0.5);
+        const x = Math.cos(aa) * rr;
+        const y = Math.sin(aa) * rr;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    } else {
+      // fire — 동심 두 겹 원
+      ctx.beginPath();
+      ctx.arc(0, 0, v.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = a * 0.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, v.radius * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
   }
 
   // === 바닥 ===
@@ -766,14 +1099,73 @@ export class Renderer {
     ctx.arc(e.x + ed * 0.8, e.y - r * 0.15, ed * 0.32, 0, Math.PI * 2);
     ctx.fill();
 
-    // 점화 표시 — 화염 링
+    // ailment 표시 — 점화/한기/감전
+    const t = performance.now() / 1000;
     if (e.igniteTime > 0) {
-      ctx.strokeStyle = '#ff8c44';
+      // 화염 링 + 위로 일렁이는 작은 불꽃 자국
+      const flicker = 0.85 + Math.sin(t * 18 + e.x * 0.1) * 0.12;
+      this.drawGlow(e.x, e.y, (r + 8) * flicker, '#ff7a30', 0.55);
+      ctx.strokeStyle = '#ff9c44';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(e.x, e.y, r + 3, 0, Math.PI * 2);
       ctx.stroke();
-      this.drawGlow(e.x, e.y, r + 8, '#ff8c44', 0.4);
+      // 위로 솟는 작은 불 — 3개
+      for (let i = 0; i < 3; i++) {
+        const off = ((t * 1.6 + i * 0.33) % 1);
+        const fx = e.x + Math.sin(t * 5 + i * 2.1) * 3 + (i - 1) * 4;
+        const fy = e.y - r * 0.6 - off * 14;
+        const fa = 1 - off;
+        ctx.fillStyle = `rgba(255, 180, 80, ${fa * 0.8})`;
+        ctx.beginPath();
+        ctx.arc(fx, fy, 1.6 * (1 - off * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (e.chillTime > 0) {
+      // 청량한 한기 링 — 결정 점선
+      const a = Math.min(1, e.chillTime / 1.6);
+      ctx.strokeStyle = `rgba(180, 230, 255, ${0.7 * a})`;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, r + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // 작은 얼음 결정 두 개 위쪽
+      for (let i = 0; i < 2; i++) {
+        const ax = e.x + (i === 0 ? -1 : 1) * (r + 2);
+        const ay = e.y - r * 0.2;
+        this.drawCrystal(ax, ay, 2.6, t * 2 + i, '#bce8ff');
+      }
+    }
+    if (e.shockTime > 0) {
+      // 감전 — 띄엄띄엄 흰 호 + 머리 위 작은 번개
+      const a = Math.min(1, e.shockTime / 1.4);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = `rgba(220, 200, 255, ${0.9 * a})`;
+      ctx.lineWidth = 1.4;
+      const arcs = 3;
+      for (let i = 0; i < arcs; i++) {
+        const off = (t * 6 + i * (Math.PI * 2 / arcs)) % (Math.PI * 2);
+        const span = 0.5;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, r + 5, off, off + span);
+        ctx.stroke();
+      }
+      // 머리 위 작은 번개 (지그재그)
+      ctx.beginPath();
+      const bx = e.x;
+      const by = e.y - r - 6;
+      ctx.moveTo(bx, by);
+      const steps = 4;
+      for (let i = 1; i <= steps; i++) {
+        const yy = by + i * 2;
+        const xx = bx + (hashSin(t * 22 + i * 1.3 + e.x * 0.05) - 0.5) * 4;
+        ctx.lineTo(xx, yy);
+      }
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
     }
 
     // 체력 바

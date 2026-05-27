@@ -1,6 +1,6 @@
 // 게임 시뮬레이션의 핵심 — 플레이어, 적, 투사체, 충돌, 데미지를 다룬다.
 // UI/입력/저장과 분리해 단위로 update/render만 호출되도록 한다.
-import type { RunState, SkillState } from '../types';
+import type { DamageType, RunState, SkillState } from '../types';
 import { getSkill } from '../data/skills';
 import { bossPoolFor, spawnPoolFor } from '../data/enemies';
 import { listSupports } from '../data/supports';
@@ -125,6 +125,10 @@ export class World {
   cameraOffsetX = 0;
   cameraOffsetY = 0;
 
+  // 히트스톱 — 남은 시간(초). 0보다 크면 시뮬레이션 dt 를 거의 0으로 줄여
+  // 한 프레임 정지된 듯한 무게감을 만든다. 강한 명중/보스 처치에서만 사용.
+  hitstopT = 0;
+
   constructor(run: RunState, events: WorldEvents) {
     this.run = run;
     this.rng = new RNG(this.runSeedForFloor());
@@ -237,6 +241,17 @@ export class World {
     if (this.paused) return;
     const phase = this.run.phase;
     if (phase === 'dead' || phase === 'bonfire') return;
+    // 히트스톱 — 시뮬레이션을 거의 멈춤 (VFX/파티클은 자체 시간으로 진행하도록 dt를 0이 아닌 매우 작은 값으로).
+    // 카메라 셰이크와 VFX 페이드는 계속 흐르게 두기 위해 한 번 분기.
+    if (this.hitstopT > 0) {
+      this.hitstopT -= dt;
+      // VFX/파티클/텍스트만 정상 속도로, 게임 로직은 패스.
+      this.updateShake(dt);
+      this.updateVfx(dt);
+      this.updateParticles(dt);
+      this.updateTexts(dt);
+      return;
+    }
 
     // 플레이어 이동 / 카메라 / 무적 — fighting · boss · bossfire 모두 동일
     const ps = this.build.player;
@@ -370,6 +385,8 @@ export class World {
     e.knockX = 0;
     e.knockY = 0;
     e.flash = 0;
+    e.chillTime = 0;
+    e.shockTime = 0;
     // 아레나 가장자리 바로 바깥에서 등장 — 안쪽 플레이어를 향해 이동
     const angle = this.rng.next() * Math.PI * 2;
     const radius = this.arenaR + 24 + this.rng.next() * 36;
@@ -438,8 +455,9 @@ export class World {
       if (this.nextCast <= 0) {
         const target = this.findNearestEnemy(def.baseRange);
         if (target) {
-          this.fireProjectiles(def.color, def.baseDamage, def.baseProjectileSpeed, s, target);
+          this.fireProjectiles(def.color, def.baseDamage, def.baseProjectileSpeed, s, target, def.damageType);
           this.triggerAttackAnim('thrust');
+          this.spawnMuzzleFlash(this.player.x, this.player.y, def.color, def.damageType, target);
           this.nextCast = def.baseCooldown * s.cooldownMul;
         } else {
           // 적 없으면 살짝 기다림
@@ -451,7 +469,7 @@ export class World {
       const interval = def.cast.tickInterval * s.cooldownMul;
       while (this.auraTick >= interval) {
         this.auraTick -= interval;
-        this.auraPulse(def.baseDamage, def.baseArea * s.areaMul, def.color, s);
+        this.auraPulse(def.baseDamage, def.baseArea * s.areaMul, def.color, s, def.damageType);
         this.triggerAttackAnim('thrust');
       }
     } else if (def.cast.kind === 'orbit') {
@@ -464,7 +482,7 @@ export class World {
         // slash 는 reach 안에 있는 적만 타격 — baseRange 는 사용하지 않고 reach 로 검색
         const target = this.findNearestEnemy(def.cast.reach + 40);
         if (target) {
-          this.slashStrike(def.baseDamage, def.cast.arcDeg, def.cast.reach, def.color, s, target);
+          this.slashStrike(def.baseDamage, def.cast.arcDeg, def.cast.reach, def.color, s, target, def.damageType);
           this.triggerAttackAnim('slash');
           this.nextCast = def.baseCooldown * s.cooldownMul;
         } else {
@@ -493,6 +511,7 @@ export class World {
     baseSpeed: number,
     s: SkillState,
     target: Enemy,
+    damageType: DamageType,
   ): void {
     const dx = target.x - this.player.x;
     const dy = target.y - this.player.y;
@@ -504,7 +523,7 @@ export class World {
       const off =
         count === 1 ? 0 : -spread / 2 + (spread * i) / (count - 1);
       const a = baseAngle + off;
-      this.spawnProjectile(this.player.x, this.player.y, a, color, baseDamage, baseSpeed, s);
+      this.spawnProjectile(this.player.x, this.player.y, a, color, baseDamage, baseSpeed, s, damageType);
     }
   }
 
@@ -516,6 +535,7 @@ export class World {
     baseDamage: number,
     baseSpeed: number,
     s: SkillState,
+    damageType: DamageType,
   ): void {
     const p = this.projectiles.acquire();
     const speed = baseSpeed * s.projectileSpeedMul;
@@ -527,9 +547,11 @@ export class World {
     p.pierceLeft = s.pierce;
     p.chainLeft = s.chain;
     p.hitIds = [];
-    p.radius = 6;
+    p.radius = damageType === 'cold' ? 7 : damageType === 'lightning' ? 5 : 6;
     p.life = 0.75;
     p.color = color;
+    p.damageType = damageType;
+    p.spin = this.rng.next() * Math.PI * 2;
     p.explodeOnKill = s.explodeOnKill;
     p.explodeRadius = s.explodeRadius * s.areaMul;
     p.explodeDamageMul = s.explodeDamageMul;
@@ -538,25 +560,82 @@ export class World {
     p.igniteDamageMulPerSec = s.igniteDamageMulPerSec;
   }
 
-  private auraPulse(baseDamage: number, radius: number, color: string, s: SkillState): void {
+  // 시전 위치 머즐 플래시 — 짧고 강한 발광 + 진행 방향 파편.
+  private spawnMuzzleFlash(
+    x: number,
+    y: number,
+    color: string,
+    damageType: DamageType,
+    target: Enemy,
+  ): void {
+    const ang = Math.atan2(target.y - y, target.x - x);
+    // 진행 방향으로 살짝 앞쪽에 위치
+    const fx = x + Math.cos(ang) * 12;
+    const fy = y + Math.sin(ang) * 12;
+    const v = this.vfx.acquire();
+    v.kind = 'muzzle';
+    v.x = fx;
+    v.y = fy;
+    v.radius = 0;
+    v.maxRadius = 22;
+    v.life = 0.16;
+    v.maxLife = 0.16;
+    v.color = color;
+    v.angle = ang;
+    v.arcSpan = Math.PI * 0.7;
+    v.damageType = damageType;
+    v.phase = this.rng.next() * Math.PI * 2;
+    // 진행 방향 정렬된 스파크 — 타입에 따라 분포 조정
+    const sparkCount = damageType === 'lightning' ? 5 : damageType === 'cold' ? 7 : 6;
+    this.spawnHitSparks(fx, fy, color, sparkCount, 260, {
+      baseAngle: ang,
+      spread: damageType === 'lightning' ? Math.PI * 0.35 : Math.PI * 0.55,
+      life: 0.28,
+      size: damageType === 'lightning' ? 1.4 : 2,
+    });
+    // 발 아래 룬 (PoE 식 캐스트 잔재) — fire/cold/lightning 만
+    if (damageType !== 'physical') {
+      const rune = this.vfx.acquire();
+      rune.kind = 'rune';
+      rune.x = x;
+      rune.y = y + 4;
+      rune.radius = 0;
+      rune.maxRadius = 24;
+      rune.life = 0.32;
+      rune.maxLife = 0.32;
+      rune.color = color;
+      rune.damageType = damageType;
+      rune.phase = this.rng.next() * Math.PI * 2;
+    }
+  }
+
+  private auraPulse(
+    baseDamage: number,
+    radius: number,
+    color: string,
+    s: SkillState,
+    damageType: DamageType,
+  ): void {
     const dmg = baseDamage * s.damageMul;
-    // 시각 효과
+    // 시각 효과 — 펄스 링 (타입별 다른 형태)
     const vfx = this.vfx.acquire();
     vfx.kind = 'ring';
     vfx.x = this.player.x;
     vfx.y = this.player.y;
     vfx.radius = 0;
     vfx.maxRadius = radius;
-    vfx.maxLife = 0.35;
+    vfx.maxLife = 0.4;
     vfx.life = vfx.maxLife;
     vfx.color = color;
+    vfx.damageType = damageType;
+    vfx.phase = this.rng.next() * Math.PI * 2;
 
     // 범위 내 모든 적에게 데미지
     this.enemies.forEachActive((e) => {
       const dx = e.x - this.player.x;
       const dy = e.y - this.player.y;
       if (dx * dx + dy * dy <= radius * radius) {
-        this.hitEnemy(e, dmg, s, true);
+        this.hitEnemy(e, dmg, s, true, damageType);
       }
     });
   }
@@ -569,6 +648,7 @@ export class World {
     color: string,
     s: SkillState,
     target: Enemy,
+    damageType: DamageType,
   ): void {
     const dmg = baseDamage * s.damageMul;
     const reachScaled = reach * s.areaMul;
@@ -585,11 +665,13 @@ export class World {
     vfx.y = this.player.y;
     vfx.radius = 0;
     vfx.maxRadius = reachScaled;
-    vfx.maxLife = 0.22;
+    vfx.maxLife = 0.24;
     vfx.life = vfx.maxLife;
     vfx.color = color;
     vfx.angle = aim;
     vfx.arcSpan = half * 2;
+    vfx.damageType = damageType;
+    vfx.phase = this.rng.next() * Math.PI * 2;
 
     // 부채꼴 안 적 모두 타격
     this.enemies.forEachActive((e) => {
@@ -604,7 +686,7 @@ export class World {
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       if (Math.abs(diff) > half) return;
-      this.hitEnemy(e, dmg, s, false);
+      this.hitEnemy(e, dmg, s, false, damageType);
     });
   }
 
@@ -617,7 +699,9 @@ export class World {
       const dx = this.player.x - e.x;
       const dy = this.player.y - e.y;
       const dist = Math.hypot(dx, dy) || 0.001;
-      const sp = e.def.moveSpeed * this.floorSpec.enemySpeedMul;
+      // 한기 적용 시 30% 둔화 (PoE 식 chill)
+      const chillSlow = e.chillTime > 0 ? 0.7 : 1;
+      const sp = e.def.moveSpeed * this.floorSpec.enemySpeedMul * chillSlow;
       e.x += (dx / dist) * sp * dt + e.knockX * dt;
       e.y += (dy / dist) * sp * dt + e.knockY * dt;
       // 넉백 감쇠
@@ -633,6 +717,9 @@ export class World {
         }
       }
       if (e.flash > 0) e.flash -= dt;
+      // 한기/감전 ailment 감쇠
+      if (e.chillTime > 0) e.chillTime -= dt;
+      if (e.shockTime > 0) e.shockTime -= dt;
 
       // 플레이어 충돌
       if (dist < pr + e.def.radius && this.player.invuln <= 0) {
@@ -641,12 +728,14 @@ export class World {
         this.player.invuln = 0.6;
         this.player.flash = 0.15;
         this.events.onPlayerHurt?.();
-        // 임팩트 — 붉은 스파크 + 큰 셰이크
-        this.spawnHitSparks(this.player.x, this.player.y, '#ff6478', 10, 240, {
+        // 임팩트 — 붉은 스파크 + 큰 셰이크 + 짧은 붉은 페이드
+        this.spawnHitSparks(this.player.x, this.player.y, '#ff6478', 12, 260, {
           life: 0.4,
           size: 2.4,
         });
+        this.spawnImpactGlow(this.player.x, this.player.y, '#ff6478', 22);
         this.shake(0.32, 6);
+        this.flashScreen('#b8243a', 0.18);
         // 살짝 밀어내기
         e.knockX = -(dx / dist) * 60;
         e.knockY = -(dy / dist) * 60;
@@ -705,18 +794,20 @@ export class World {
     e.knockY += (dy / len) * 80;
     e.flash = 0.14;
     e.hp -= p.damage;
-    this.spawnDamageText(e.x, e.y - e.def.radius, p.damage, '#ffe2b3', 0.55);
+    // 데미지 텍스트 색을 타입에 맞게
+    const dmgColor = this.damageTextColor(p.damageType);
+    this.spawnDamageText(e.x, e.y - e.def.radius, p.damage, dmgColor, 0.55);
     // 임팩트 — 투사체 진행 방향 반대로 스파크가 튀고 큰 글로우 한 번
     const impactAngle = Math.atan2(p.vy, p.vx);
-    this.spawnHitSparks(p.x, p.y, p.color, 8, 220, {
-      baseAngle: impactAngle + Math.PI,
-      spread: Math.PI * 0.9,
-      life: 0.35,
-      size: 2.2,
-    });
-    this.spawnImpactGlow(p.x, p.y, p.color, 18);
+    this.spawnTypedImpact(p.x, p.y, p.color, p.damageType, impactAngle + Math.PI);
     this.shake(0.18, 2.6);
-    // 점화 적용
+    // 보스에는 매 명중마다 짧은 hitstop — 묵직한 타격감
+    if (e.def.role === 'boss') {
+      this.freeze(0.04);
+    }
+    // ailment 적용 — 타입별
+    this.applyAilment(e, p.damageType, p.damage);
+    // 점화 적용 (스킬 옵션)
     if (p.ignite && p.igniteDuration > 0) {
       e.igniteTime = Math.max(e.igniteTime, p.igniteDuration);
       const newDps = p.damage * p.igniteDamageMulPerSec;
@@ -727,6 +818,84 @@ export class World {
       return true;
     }
     return false;
+  }
+
+  // 데미지 타입별 텍스트/이펙트 색
+  private damageTextColor(type: DamageType): string {
+    switch (type) {
+      case 'fire': return '#ffb380';
+      case 'cold': return '#bce8ff';
+      case 'lightning': return '#e6e2ff';
+      default: return '#ffe2b3';
+    }
+  }
+
+  // 타입별 명중 임팩트 — 스파크 패턴/사이즈를 다르게.
+  private spawnTypedImpact(
+    x: number,
+    y: number,
+    color: string,
+    type: DamageType,
+    backAngle: number,
+  ): void {
+    if (type === 'lightning') {
+      // 좁은 분포로 빠른 스파크 + 흰 코어
+      this.spawnHitSparks(x, y, color, 10, 320, {
+        baseAngle: backAngle,
+        spread: Math.PI * 0.6,
+        life: 0.22,
+        size: 1.6,
+      });
+      this.spawnHitSparks(x, y, '#ffffff', 3, 360, {
+        baseAngle: backAngle,
+        spread: Math.PI * 0.45,
+        life: 0.18,
+        size: 1.2,
+      });
+      this.spawnImpactGlow(x, y, color, 22);
+    } else if (type === 'cold') {
+      // 결정 파편 — 사방으로 천천히
+      this.spawnHitSparks(x, y, color, 10, 180, {
+        spread: Math.PI * 2,
+        life: 0.5,
+        size: 2.2,
+      });
+      this.spawnImpactGlow(x, y, color, 20);
+    } else if (type === 'fire') {
+      // 깃털 일렁임 — 위쪽으로 살짝 솟아오름
+      this.spawnHitSparks(x, y, color, 9, 240, {
+        baseAngle: backAngle - Math.PI / 8,
+        spread: Math.PI * 1.0,
+        life: 0.42,
+        size: 2.4,
+      });
+      this.spawnImpactGlow(x, y, color, 22);
+      // 위쪽 잔열 스파크
+      this.spawnHitSparks(x, y - 4, '#ffd9a0', 3, 100, {
+        baseAngle: -Math.PI / 2,
+        spread: Math.PI * 0.4,
+        life: 0.55,
+        size: 1.6,
+      });
+    } else {
+      // 물리 — 기본 스파크
+      this.spawnHitSparks(x, y, color, 8, 220, {
+        baseAngle: backAngle,
+        spread: Math.PI * 0.9,
+        life: 0.35,
+        size: 2.2,
+      });
+      this.spawnImpactGlow(x, y, color, 18);
+    }
+  }
+
+  // PoE 식 ailment 부여. 한기는 cold, 감전은 lightning에서.
+  private applyAilment(e: Enemy, type: DamageType, _dmg: number): void {
+    if (type === 'cold') {
+      e.chillTime = Math.max(e.chillTime, 1.6);
+    } else if (type === 'lightning') {
+      e.shockTime = Math.max(e.shockTime, 1.4);
+    }
   }
 
   private chainProjectile(p: Projectile, fromEnemy: Enemy): void {
@@ -794,9 +963,10 @@ export class World {
           e.hp -= dmg;
           e.flash = 0.14;
           this.spawnDamageText(e.x, e.y - e.def.radius, dmg, '#ffffff', 0.5);
-          // 임팩트 — 칼날 색깔 스파크
-          this.spawnHitSparks(e.x, e.y, def.color, 5, 200, { life: 0.28, size: 1.8 });
-          this.spawnImpactGlow(e.x, e.y, def.color, 12);
+          // 임팩트 — 타입별 스파크
+          this.spawnTypedImpact(e.x, e.y, def.color, def.damageType, 0);
+          // ailment
+          this.applyAilment(e, def.damageType, dmg);
           // 점화 부여
           if (s.ignite && s.igniteDuration > 0) {
             e.igniteTime = Math.max(e.igniteTime, s.igniteDuration);
@@ -821,10 +991,14 @@ export class World {
       this.killBoss(e);
       return;
     }
-    // 일반 적 사망 임팩트
+    // 일반 적 사망 임팩트 — 흰 코어 폭발 + 큰 컬러 글로우 + 파편
     this.spawnHitSparks(e.x, e.y, def.color, 14, 240, { life: 0.45, size: 2.2 });
-    this.spawnImpactGlow(e.x, e.y, def.color, 22);
+    this.spawnHitSparks(e.x, e.y, '#ffffff', 5, 320, { life: 0.22, size: 1.6 });
+    this.spawnImpactGlow(e.x, e.y, '#ffffff', 14);
+    this.spawnImpactGlow(e.x, e.y, def.color, 28);
     this.shake(0.22, 3.2);
+    // 짧은 hitstop — 잡몹은 매우 짧게 (체감만 살짝)
+    this.freeze(0.035);
     if (byProj?.explodeOnKill && byProj.explodeRadius > 0) {
       this.explosion(
         e.x,
@@ -859,12 +1033,29 @@ export class World {
     ring.y = by;
     ring.radius = 0;
     ring.maxRadius = BOSS_EXPLODE_RADIUS;
-    ring.life = 0.4;
-    ring.maxLife = 0.4;
+    ring.life = 0.55;
+    ring.maxLife = 0.55;
     ring.color = def.color;
-    this.spawnHitSparks(bx, by, def.color, 20, 300, { life: 0.5, size: 2.3 });
-    this.spawnImpactGlow(bx, by, def.color, 32);
-    this.shake(0.32, 4.5);
+    ring.damageType = 'physical';
+    // 두 번째 큰 링 — 보스 톤
+    const ring2 = this.vfx.acquire();
+    ring2.kind = 'ring';
+    ring2.x = bx;
+    ring2.y = by;
+    ring2.radius = 0;
+    ring2.maxRadius = BOSS_EXPLODE_RADIUS * 1.6;
+    ring2.life = 0.7;
+    ring2.maxLife = 0.7;
+    ring2.color = '#ffffff';
+    ring2.damageType = 'physical';
+    this.spawnHitSparks(bx, by, def.color, 28, 360, { life: 0.7, size: 2.6 });
+    this.spawnHitSparks(bx, by, '#ffffff', 10, 420, { life: 0.4, size: 1.8 });
+    this.spawnImpactGlow(bx, by, '#ffffff', 40);
+    this.spawnImpactGlow(bx, by, def.color, 56);
+    this.shake(0.55, 7);
+    // 화이트아웃 + 깊은 hitstop (디아블로식 컷)
+    this.flashScreen('#ffffff', 0.32);
+    this.freeze(0.18);
     // 4) 남은 잡몹은 조용히 정리 — 데미지/재귀 없이 작은 이펙트만
     this.enemies.forEachActive((other) => {
       this.spawnHitSparks(other.x, other.y, other.def.color, 4, 180, {
@@ -913,13 +1104,21 @@ export class World {
   }
 
   // 일반 적 피격 (오라/슬래시용)
-  private hitEnemy(e: Enemy, dmg: number, s: SkillState, ignoreFlash = false): void {
+  private hitEnemy(
+    e: Enemy,
+    dmg: number,
+    s: SkillState,
+    ignoreFlash = false,
+    damageType: DamageType = 'physical',
+  ): void {
     e.hp -= dmg;
     if (!ignoreFlash) e.flash = 0.14;
-    this.spawnDamageText(e.x, e.y - e.def.radius, dmg, '#bce8ff', 0.45);
-    // 임팩트 — 색깔 스파크 6개 + 작은 글로우
-    this.spawnHitSparks(e.x, e.y, s.color, 6, 180, { life: 0.3, size: 1.8 });
-    this.spawnImpactGlow(e.x, e.y, s.color, 14);
+    const dmgColor = this.damageTextColor(damageType);
+    this.spawnDamageText(e.x, e.y - e.def.radius, dmg, dmgColor, 0.45);
+    // 임팩트 — 타입별 다른 패턴
+    this.spawnTypedImpact(e.x, e.y, s.color, damageType, 0);
+    // ailment
+    this.applyAilment(e, damageType, dmg);
     if (s.ignite && s.igniteDuration > 0) {
       e.igniteTime = Math.max(e.igniteTime, s.igniteDuration);
       const newDps = dmg * s.igniteDamageMulPerSec;
@@ -1096,6 +1295,26 @@ export class World {
     this.shakeT = duration;
     this.shakeMaxT = duration;
     this.shakeAmp = amplitude;
+  }
+
+  // 히트스톱 — 짧은 게임 정지. 더 긴 hitstop 이 진행 중이면 무시.
+  freeze(duration: number): void {
+    if (duration > this.hitstopT) this.hitstopT = duration;
+  }
+
+  // 화면 전체 페이드 (보스 처치 화이트아웃 등). color는 'white' 권장.
+  flashScreen(color: string, life: number): void {
+    const v = this.vfx.acquire();
+    v.kind = 'flash';
+    v.x = 0;
+    v.y = 0;
+    v.radius = 0;
+    v.maxRadius = 0;
+    v.life = life;
+    v.maxLife = life;
+    v.color = color;
+    v.damageType = 'physical';
+    v.phase = 0;
   }
 
   private updateShake(dt: number): void {
