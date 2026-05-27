@@ -27,7 +27,7 @@ export interface WorldEvents {
 
 // 보스 처치 후 화톳불이 드러나는 폭발 연출 길이.
 const BOSS_EXPLODE_TIME = 0.8;
-const BOSS_EXPLODE_RADIUS = 160;
+const BOSS_EXPLODE_RADIUS = 130;
 // NPC 와 인접하다고 판정하는 거리. 이 이내에서 상호작용 입력 시 정비 진입.
 export const NPC_INTERACT_RANGE = 60;
 
@@ -793,36 +793,15 @@ export class World {
   // === 적 처치 ===
   private killEnemy(e: Enemy, byProj: Projectile | null): void {
     const def = e.def;
-    const isBoss = def.role === 'boss';
-    // 사망 임팩트 — 몸 크기에 비례한 폭발 파티클
-    const burstCount = isBoss ? 36 : 14;
-    const burstSpeed = isBoss ? 380 : 240;
-    this.spawnHitSparks(e.x, e.y, def.color, burstCount, burstSpeed, {
-      life: isBoss ? 0.7 : 0.45,
-      size: isBoss ? 3.0 : 2.2,
-    });
-    this.spawnImpactGlow(e.x, e.y, def.color, isBoss ? 60 : 22);
-    this.shake(isBoss ? 0.55 : 0.22, isBoss ? 8 : 3.2);
-    if (isBoss) {
-      // 보스 폭발 연출 시작 → bossfire phase 전환
-      this.run.phase = 'bossfire';
-      this.bossExplodeTime = BOSS_EXPLODE_TIME;
-      this.bossExplodePos = { x: e.x, y: e.y };
-      // 큰 광역 폭발 이펙트 (시각)
-      this.explosion(e.x, e.y, BOSS_EXPLODE_RADIUS, def.damage * 1.5);
-      // 남은 잡몹은 폭발 충격으로 모두 소멸 — NPC 휴식 시간 확보
-      this.enemies.forEachActive((other) => {
-        if (other.def.role === 'boss') return;
-        if (other.hp <= 0) return;
-        other.hp = 0;
-        this.killEnemy(other, null);
-      });
-      // 클리어 보너스 크레딧
-      this.run.credits += this.floorSpec.creditClearBonus;
-      // 임시 보스 드랍 — 미보유 서포트 1 개 자동 인벤토리 추가
-      this.dropBossSupport();
-      this.events.onBossDefeated?.();
-    } else if (byProj?.explodeOnKill && byProj.explodeRadius > 0) {
+    if (def.role === 'boss') {
+      this.killBoss(e);
+      return;
+    }
+    // 일반 적 사망 임팩트
+    this.spawnHitSparks(e.x, e.y, def.color, 14, 240, { life: 0.45, size: 2.2 });
+    this.spawnImpactGlow(e.x, e.y, def.color, 22);
+    this.shake(0.22, 3.2);
+    if (byProj?.explodeOnKill && byProj.explodeRadius > 0) {
       this.explosion(
         e.x,
         e.y,
@@ -830,10 +809,52 @@ export class World {
         byProj.damage * byProj.explodeDamageMul,
       );
     }
-    // 크레딧 오브 드랍
     this.spawnCreditOrb(e.x, e.y, def.credits);
     this.run.killsTotal += 1;
     this.enemies.release(e);
+  }
+
+  // 보스 처치 — 데미지 재귀 없이 전용 연출.
+  // (explosion() 을 재사용하면 보스 본인이 release되기 전에 다시 데미지를
+  //  받아 killEnemy 가 재귀 호출되는 버그가 있었음 → 별도 함수로 분리.)
+  private killBoss(boss: Enemy): void {
+    const def = boss.def;
+    const bx = boss.x;
+    const by = boss.y;
+    // 1) 보스를 먼저 release — 이후 어떤 forEachActive 도 보스를 건드리지 못함
+    this.run.killsTotal += 1;
+    this.enemies.release(boss);
+    // 2) phase 전환
+    this.run.phase = 'bossfire';
+    this.bossExplodeTime = BOSS_EXPLODE_TIME;
+    this.bossExplodePos = { x: bx, y: by };
+    // 3) 시각 폭발 (데미지 없음)
+    const ring = this.vfx.acquire();
+    ring.kind = 'ring';
+    ring.x = bx;
+    ring.y = by;
+    ring.radius = 0;
+    ring.maxRadius = BOSS_EXPLODE_RADIUS;
+    ring.life = 0.4;
+    ring.maxLife = 0.4;
+    ring.color = def.color;
+    this.spawnHitSparks(bx, by, def.color, 20, 300, { life: 0.5, size: 2.3 });
+    this.spawnImpactGlow(bx, by, def.color, 32);
+    this.shake(0.32, 4.5);
+    // 4) 남은 잡몹은 조용히 정리 — 데미지/재귀 없이 작은 이펙트만
+    this.enemies.forEachActive((other) => {
+      this.spawnHitSparks(other.x, other.y, other.def.color, 4, 180, {
+        life: 0.25, size: 1.4,
+      });
+      this.spawnCreditOrb(other.x, other.y, other.def.credits);
+      this.run.killsTotal += 1;
+      this.enemies.release(other);
+    });
+    // 5) 클리어 보너스 + 보스 드랍 + 이벤트
+    this.run.credits += this.floorSpec.creditClearBonus;
+    this.spawnCreditOrb(bx, by, def.credits);
+    this.dropBossSupport();
+    this.events.onBossDefeated?.();
   }
 
   private explosion(x: number, y: number, radius: number, dmg: number): void {
@@ -847,10 +868,14 @@ export class World {
     v.maxLife = 0.32;
     v.color = '#ff9244';
     // 임팩트 — 화염 파편 + 셰이크
-    this.spawnHitSparks(x, y, '#ff9244', 24, 320, { life: 0.5, size: 2.6 });
-    this.spawnImpactGlow(x, y, '#ffd9a0', 40);
-    this.shake(0.35, 5);
+    this.spawnHitSparks(x, y, '#ff9244', 18, 300, { life: 0.45, size: 2.4 });
+    this.spawnImpactGlow(x, y, '#ffd9a0', 32);
+    this.shake(0.28, 4);
     this.enemies.forEachActive((e) => {
+      // 이미 처치 중인 적은 건너뜀 — killEnemy 재귀 차단
+      if (e.hp <= 0) return;
+      // 보스는 폭발 광역 데미지에 영향받지 않게 (자기 사망 처리 별도 경로)
+      if (e.def.role === 'boss') return;
       const dx = e.x - x;
       const dy = e.y - y;
       if (dx * dx + dy * dy <= radius * radius) {
