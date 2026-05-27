@@ -63,8 +63,11 @@ export class CreditOrb {
 }
 
 // 시각 효과 (폭발 같은 단발성)
+export type VfxKind = 'ring' | 'arc';
+
 export class Vfx {
   active = false;
+  kind: VfxKind = 'ring';
   x = 0;
   y = 0;
   radius = 0;
@@ -72,6 +75,9 @@ export class Vfx {
   life = 0; // 남은 시간 (초)
   maxLife = 0;
   color = '#ffffff';
+  // arc 전용 — 정면 각도(라디안) 및 부채꼴 폭(라디안)
+  angle = 0;
+  arcSpan = 0;
 }
 
 // 데미지 숫자 띄우기
@@ -84,4 +90,24 @@ export class FloatingText {
   life = 0;
   maxLife = 0;
   color = '#ffffff';
+  // 큰 데미지는 크게 표시
+  size = 11;
+}
+
+// 작은 점/스파크 파티클 — 피격/처치/투사체 트레일 등에 두루 사용
+export type ParticleKind = 'spark' | 'glow';
+
+export class Particle {
+  active = false;
+  kind: ParticleKind = 'spark';
+  x = 0;
+  y = 0;
+  vx = 0;
+  vy = 0;
+  life = 0;
+  maxLife = 0;
+  size = 2;
+  color = '#ffffff';
+  // 마찰계수 (0이면 등속, 양수면 점점 느려짐)
+  drag = 0;
 }

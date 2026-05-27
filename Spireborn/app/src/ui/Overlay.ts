@@ -37,6 +37,8 @@ const REROLL_LINKS_BASE = 15;
 const REROLL_AFFIX_BASE = 20;
 const GEM_BUY_BASE = 25;
 const GEM_SWAP_BASE = 10;
+// 메인 스킬 가챠 — 화톳불마다 같은 카운터에 누적되어 비싸진다.
+const MAIN_SKILL_REROLL_BASE = 50;
 // 장착 아이템 슬롯 정원
 const MAX_EQUIPPED_ITEMS = 4;
 // 미장착 인벤토리 정원
@@ -97,7 +99,8 @@ export class Overlay {
   }
 
   // === 룰렛 ===
-  runRoulette(onPicked: (skillId: string) => void): void {
+  // excludeId 가 주어지면 최종 결과에서 그 스킬을 제외(중복 회피용).
+  runRoulette(onPicked: (skillId: string) => void, excludeId?: string): void {
     const skills = listSkills();
     const cycles = 10;
     const items: SkillDef[] = [];
@@ -105,7 +108,11 @@ export class Overlay {
       const shuf = shuffle(skills.slice());
       items.push(...shuf);
     }
-    const finalSkill = skills[Math.floor(Math.random() * skills.length)];
+    const pickPool = excludeId
+      ? skills.filter((s) => s.id !== excludeId)
+      : skills;
+    const finalSkill =
+      pickPool[Math.floor(Math.random() * pickPool.length)] ?? skills[0];
     const lastCycleStart = items.length - skills.length;
     let finalIdx = -1;
     for (let i = lastCycleStart; i < items.length; i++) {
@@ -222,6 +229,10 @@ export class Overlay {
     const gemBuyCost = counter.cost('gemBuy', GEM_BUY_BASE);
     const itemRerollCost = counter.cost('itemReward', REROLL_ITEM_BASE);
     const socketCost = socketExpandCost(run.mainSkill.sockets);
+    const mainSkillRerollCost = counter.cost(
+      'mainSkill',
+      MAIN_SKILL_REROLL_BASE,
+    );
 
     const credits = run.credits;
     const hasRewards = itemRewards.length > 0;
@@ -253,6 +264,11 @@ export class Overlay {
           <span class="shop-label">젬 구매</span>
           <span class="shop-cost">${gemBuyCost}c</span>
           <span class="shop-sub">${inventoryFull ? '인벤토리 가득' : `인벤토리 ${run.supports.length}/${MAX_INVENTORY}`}</span>
+        </button>
+        <button class="shop-btn" data-shop="mainSkill" ${credits < mainSkillRerollCost ? 'disabled' : ''}>
+          <span class="shop-label">메인 스킬 가챠</span>
+          <span class="shop-cost">${mainSkillRerollCost}c</span>
+          <span class="shop-sub">현재: ${mainSkillDef.name}</span>
         </button>
       </div>
     `;
@@ -588,6 +604,22 @@ export class Overlay {
       counter.bump('gemBuy');
       onChange();
     });
+
+    // 상점 — 메인 스킬 가챠 (룰렛 애니메이션 → defId 교체, 소켓/링크/서포트는 유지)
+    panel
+      .querySelector('[data-shop="mainSkill"]')
+      ?.addEventListener('click', () => {
+        const cost = counter.cost('mainSkill', MAIN_SKILL_REROLL_BASE);
+        if (run.credits < cost) return;
+        run.credits -= cost;
+        counter.bump('mainSkill');
+        const currentId = run.mainSkill.defId;
+        this.runRoulette((skillId) => {
+          run.mainSkill.defId = skillId;
+          // onChange 가 정비 화면을 다시 렌더하면서 자연스럽게 룰렛 패널이 닫힌다.
+          onChange();
+        }, currentId);
+      });
 
     // 장착 아이템 — 접두 변경
     panel.querySelectorAll('[data-item-prefix]').forEach((btn) => {

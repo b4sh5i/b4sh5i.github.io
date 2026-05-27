@@ -21,7 +21,8 @@ export type RerollKey =
   | 'gemBuy'
   | 'gemSwap'
   | 'prefix'
-  | 'suffix';
+  | 'suffix'
+  | 'mainSkill';
 
 export class RerollCounter {
   private counts: Map<RerollKey, number> = new Map();

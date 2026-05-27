@@ -13,6 +13,7 @@ import {
   CreditOrb,
   Vfx,
   FloatingText,
+  Particle,
 } from './entities';
 import { specForFloor, currentSpawnInterval, FloorSpec } from './floor';
 import { computeBuild, ComputedBuild, makeSupportInstance } from './build';
@@ -30,9 +31,10 @@ const BOSS_EXPLODE_RADIUS = 160;
 // NPC 와 인접하다고 판정하는 거리. 이 이내에서 상호작용 입력 시 정비 진입.
 export const NPC_INTERACT_RANGE = 60;
 
-// 한 층의 원형 아레나 반경 (월드 단위). 층마다 살짝 커지지만 화면 안에 들어가는 크기.
+// 한 층의 원형 아레나 반경 (월드 단위). 층마다 살짝 커지면서 적이 등장 후
+// 충분한 진입 거리를 확보하도록 여유 있게 잡는다.
 export function arenaRadius(floor: number): number {
-  return 280 + Math.min(120, (floor - 1) * 6);
+  return 440 + Math.min(220, (floor - 1) * 10);
 }
 
 export class World {
@@ -69,9 +71,10 @@ export class World {
   creditOrbs = new Pool<CreditOrb>(() => new CreditOrb());
   vfx = new Pool<Vfx>(() => new Vfx());
   texts = new Pool<FloatingText>(() => new FloatingText());
+  particles = new Pool<Particle>(() => new Particle());
 
   // 아레나
-  arenaR = 280;
+  arenaR = 440;
 
   // 적 ID 발급기 (관통 중복 방지용)
   private nextEnemyId = 1;
@@ -106,6 +109,15 @@ export class World {
 
   // 일시정지 (레벨업/정비 UI 동안)
   paused = false;
+
+  // 카메라 셰이크 — 남은 지속 시간 / 진폭(픽셀) / 위상
+  shakeT = 0;
+  shakeMaxT = 0;
+  shakeAmp = 0;
+  private shakeTime = 0;
+  // 외부(Renderer)에서 매 프레임 카메라에 더할 오프셋
+  cameraOffsetX = 0;
+  cameraOffsetY = 0;
 
   constructor(run: RunState, events: WorldEvents) {
     this.run = run;
@@ -144,6 +156,7 @@ export class World {
     this.creditOrbs.clear();
     this.vfx.clear();
     this.texts.clear();
+    this.particles.clear();
     this.player.x = 0;
     this.player.y = 0;
     this.nextCast = 0;
@@ -253,12 +266,14 @@ export class World {
       this.player.y = (this.player.y / pd) * limit;
     }
 
-    // 카메라 — 플레이어 추적
+    // 카메라 — 플레이어 추적 + 셰이크 오프셋
     this.cameraX = this.player.x;
     this.cameraY = this.player.y;
+    this.updateShake(dt);
 
     // 시각 효과 / 부유 텍스트 / 크레딧 오브는 항상 진행
     this.updateVfx(dt);
+    this.updateParticles(dt);
     this.updateTexts(dt);
     this.updateCreditOrbs(dt);
 
@@ -427,12 +442,24 @@ export class World {
       const interval = def.cast.tickInterval * s.cooldownMul;
       while (this.auraTick >= interval) {
         this.auraTick -= interval;
-        this.auraPulse(def.baseDamage, def.baseArea * s.areaMul, s);
+        this.auraPulse(def.baseDamage, def.baseArea * s.areaMul, def.color, s);
       }
     } else if (def.cast.kind === 'orbit') {
       // 회전은 updateOrbits에서 다룸 — 여기선 칼날 회전만 진행
       const speed = def.cast.rotationSpeed * (s.projectileSpeedMul || 1);
       this.orbitAngle += dt * speed;
+    } else if (def.cast.kind === 'slash') {
+      this.nextCast -= dt;
+      if (this.nextCast <= 0) {
+        // slash 는 reach 안에 있는 적만 타격 — baseRange 는 사용하지 않고 reach 로 검색
+        const target = this.findNearestEnemy(def.cast.reach + 40);
+        if (target) {
+          this.slashStrike(def.baseDamage, def.cast.arcDeg, def.cast.reach, def.color, s, target);
+          this.nextCast = def.baseCooldown * s.cooldownMul;
+        } else {
+          this.nextCast = 0.15;
+        }
+      }
     }
   }
 
@@ -477,7 +504,7 @@ export class World {
     p.chainLeft = s.chain;
     p.hitIds = [];
     p.radius = 6;
-    p.life = 2.4;
+    p.life = 0.75;
     p.color = color;
     p.explodeOnKill = s.explodeOnKill;
     p.explodeRadius = s.explodeRadius * s.areaMul;
@@ -487,17 +514,18 @@ export class World {
     p.igniteDamageMulPerSec = s.igniteDamageMulPerSec;
   }
 
-  private auraPulse(baseDamage: number, radius: number, s: SkillState): void {
+  private auraPulse(baseDamage: number, radius: number, color: string, s: SkillState): void {
     const dmg = baseDamage * s.damageMul;
     // 시각 효과
     const vfx = this.vfx.acquire();
+    vfx.kind = 'ring';
     vfx.x = this.player.x;
     vfx.y = this.player.y;
     vfx.radius = 0;
     vfx.maxRadius = radius;
     vfx.maxLife = 0.35;
     vfx.life = vfx.maxLife;
-    vfx.color = '#9ad4ff';
+    vfx.color = color;
 
     // 범위 내 모든 적에게 데미지
     this.enemies.forEachActive((e) => {
@@ -506,6 +534,53 @@ export class World {
       if (dx * dx + dy * dy <= radius * radius) {
         this.hitEnemy(e, dmg, s, true);
       }
+    });
+  }
+
+  // 전방 부채꼴 즉시 타격 — target 이 가리키는 방향을 기준으로 arcDeg/reach 만큼.
+  private slashStrike(
+    baseDamage: number,
+    arcDeg: number,
+    reach: number,
+    color: string,
+    s: SkillState,
+    target: Enemy,
+  ): void {
+    const dmg = baseDamage * s.damageMul;
+    const reachScaled = reach * s.areaMul;
+    const dx = target.x - this.player.x;
+    const dy = target.y - this.player.y;
+    const aim = Math.atan2(dy, dx);
+    this.player.facing = aim;
+    const half = (arcDeg * Math.PI) / 180 / 2;
+
+    // 시각 효과 — 부채꼴
+    const vfx = this.vfx.acquire();
+    vfx.kind = 'arc';
+    vfx.x = this.player.x;
+    vfx.y = this.player.y;
+    vfx.radius = 0;
+    vfx.maxRadius = reachScaled;
+    vfx.maxLife = 0.22;
+    vfx.life = vfx.maxLife;
+    vfx.color = color;
+    vfx.angle = aim;
+    vfx.arcSpan = half * 2;
+
+    // 부채꼴 안 적 모두 타격
+    this.enemies.forEachActive((e) => {
+      const ex = e.x - this.player.x;
+      const ey = e.y - this.player.y;
+      const distSq = ex * ex + ey * ey;
+      const reachWithEnemy = reachScaled + e.def.radius;
+      if (distSq > reachWithEnemy * reachWithEnemy) return;
+      // 각도 차이
+      const ang = Math.atan2(ey, ex);
+      let diff = ang - aim;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) > half) return;
+      this.hitEnemy(e, dmg, s, false);
     });
   }
 
@@ -542,6 +617,12 @@ export class World {
         this.player.invuln = 0.6;
         this.player.flash = 0.15;
         this.events.onPlayerHurt?.();
+        // 임팩트 — 붉은 스파크 + 큰 셰이크
+        this.spawnHitSparks(this.player.x, this.player.y, '#ff6478', 10, 240, {
+          life: 0.4,
+          size: 2.4,
+        });
+        this.shake(0.32, 6);
         // 살짝 밀어내기
         e.knockX = -(dx / dist) * 60;
         e.knockY = -(dy / dist) * 60;
@@ -596,11 +677,21 @@ export class World {
     const dx = e.x - p.x;
     const dy = e.y - p.y;
     const len = Math.hypot(dx, dy) || 1;
-    e.knockX += (dx / len) * 40;
-    e.knockY += (dy / len) * 40;
-    e.flash = 0.08;
+    e.knockX += (dx / len) * 80;
+    e.knockY += (dy / len) * 80;
+    e.flash = 0.14;
     e.hp -= p.damage;
-    this.spawnText(e.x, e.y - e.def.radius, `${Math.round(p.damage)}`, '#ffe2b3', 0.55);
+    this.spawnDamageText(e.x, e.y - e.def.radius, p.damage, '#ffe2b3', 0.55);
+    // 임팩트 — 투사체 진행 방향 반대로 스파크가 튀고 큰 글로우 한 번
+    const impactAngle = Math.atan2(p.vy, p.vx);
+    this.spawnHitSparks(p.x, p.y, p.color, 8, 220, {
+      baseAngle: impactAngle + Math.PI,
+      spread: Math.PI * 0.9,
+      life: 0.35,
+      size: 2.2,
+    });
+    this.spawnImpactGlow(p.x, p.y, p.color, 18);
+    this.shake(0.18, 2.6);
     // 점화 적용
     if (p.ignite && p.igniteDuration > 0) {
       e.igniteTime = Math.max(e.igniteTime, p.igniteDuration);
@@ -617,7 +708,7 @@ export class World {
   private chainProjectile(p: Projectile, fromEnemy: Enemy): void {
     p.chainLeft--;
     // 가장 가까운 다른 적 찾기
-    const maxRange = 220;
+    const maxRange = 160;
     let best: Enemy | null = null;
     let bestD = maxRange * maxRange;
     this.enemies.forEachActive((e) => {
@@ -677,8 +768,11 @@ export class World {
           // 단발 데미지로 처리 (가짜 투사체)
           const dmg = def.baseDamage * s.damageMul;
           e.hp -= dmg;
-          e.flash = 0.08;
-          this.spawnText(e.x, e.y - e.def.radius, `${Math.round(dmg)}`, '#ffffff', 0.5);
+          e.flash = 0.14;
+          this.spawnDamageText(e.x, e.y - e.def.radius, dmg, '#ffffff', 0.5);
+          // 임팩트 — 칼날 색깔 스파크
+          this.spawnHitSparks(e.x, e.y, def.color, 5, 200, { life: 0.28, size: 1.8 });
+          this.spawnImpactGlow(e.x, e.y, def.color, 12);
           // 점화 부여
           if (s.ignite && s.igniteDuration > 0) {
             e.igniteTime = Math.max(e.igniteTime, s.igniteDuration);
@@ -700,6 +794,15 @@ export class World {
   private killEnemy(e: Enemy, byProj: Projectile | null): void {
     const def = e.def;
     const isBoss = def.role === 'boss';
+    // 사망 임팩트 — 몸 크기에 비례한 폭발 파티클
+    const burstCount = isBoss ? 36 : 14;
+    const burstSpeed = isBoss ? 380 : 240;
+    this.spawnHitSparks(e.x, e.y, def.color, burstCount, burstSpeed, {
+      life: isBoss ? 0.7 : 0.45,
+      size: isBoss ? 3.0 : 2.2,
+    });
+    this.spawnImpactGlow(e.x, e.y, def.color, isBoss ? 60 : 22);
+    this.shake(isBoss ? 0.55 : 0.22, isBoss ? 8 : 3.2);
     if (isBoss) {
       // 보스 폭발 연출 시작 → bossfire phase 전환
       this.run.phase = 'bossfire';
@@ -735,6 +838,7 @@ export class World {
 
   private explosion(x: number, y: number, radius: number, dmg: number): void {
     const v = this.vfx.acquire();
+    v.kind = 'ring';
     v.x = x;
     v.y = y;
     v.radius = 0;
@@ -742,23 +846,30 @@ export class World {
     v.life = 0.32;
     v.maxLife = 0.32;
     v.color = '#ff9244';
+    // 임팩트 — 화염 파편 + 셰이크
+    this.spawnHitSparks(x, y, '#ff9244', 24, 320, { life: 0.5, size: 2.6 });
+    this.spawnImpactGlow(x, y, '#ffd9a0', 40);
+    this.shake(0.35, 5);
     this.enemies.forEachActive((e) => {
       const dx = e.x - x;
       const dy = e.y - y;
       if (dx * dx + dy * dy <= radius * radius) {
         e.hp -= dmg;
         e.flash = 0.08;
-        this.spawnText(e.x, e.y - e.def.radius, `${Math.round(dmg)}`, '#ffb380', 0.5);
+        this.spawnDamageText(e.x, e.y - e.def.radius, dmg, '#ffb380', 0.5);
         if (e.hp <= 0) this.killEnemy(e, null);
       }
     });
   }
 
-  // 일반 적 피격 (오라용)
+  // 일반 적 피격 (오라/슬래시용)
   private hitEnemy(e: Enemy, dmg: number, s: SkillState, ignoreFlash = false): void {
     e.hp -= dmg;
-    if (!ignoreFlash) e.flash = 0.08;
-    this.spawnText(e.x, e.y - e.def.radius, `${Math.round(dmg)}`, '#bce8ff', 0.45);
+    if (!ignoreFlash) e.flash = 0.14;
+    this.spawnDamageText(e.x, e.y - e.def.radius, dmg, '#bce8ff', 0.45);
+    // 임팩트 — 색깔 스파크 6개 + 작은 글로우
+    this.spawnHitSparks(e.x, e.y, s.color, 6, 180, { life: 0.3, size: 1.8 });
+    this.spawnImpactGlow(e.x, e.y, s.color, 14);
     if (s.ignite && s.igniteDuration > 0) {
       e.igniteTime = Math.max(e.igniteTime, s.igniteDuration);
       const newDps = dmg * s.igniteDamageMulPerSec;
@@ -841,7 +952,101 @@ export class World {
     });
   }
 
-  spawnText(x: number, y: number, text: string, color: string, life: number): void {
+  private updateParticles(dt: number): void {
+    this.particles.forEachActive((p) => {
+      p.life -= dt;
+      if (p.life <= 0) {
+        this.particles.release(p);
+        return;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.drag > 0) {
+        const damp = Math.exp(-p.drag * dt);
+        p.vx *= damp;
+        p.vy *= damp;
+      }
+    });
+  }
+
+  // 피격/처치 시 색깔 파편을 방사형으로 흩뿌린다.
+  spawnHitSparks(
+    x: number,
+    y: number,
+    color: string,
+    count: number,
+    speed: number,
+    options: { spread?: number; baseAngle?: number; life?: number; size?: number } = {},
+  ): void {
+    const spread = options.spread ?? Math.PI * 2;
+    const baseAngle = options.baseAngle ?? this.rng.next() * Math.PI * 2;
+    const life = options.life ?? 0.35;
+    const size = options.size ?? 2;
+    for (let i = 0; i < count; i++) {
+      const p = this.particles.acquire();
+      const a = baseAngle + (spread === Math.PI * 2
+        ? this.rng.next() * Math.PI * 2
+        : -spread / 2 + this.rng.next() * spread);
+      const sp = speed * (0.6 + this.rng.next() * 0.5);
+      p.kind = 'spark';
+      p.x = x;
+      p.y = y;
+      p.vx = Math.cos(a) * sp;
+      p.vy = Math.sin(a) * sp;
+      p.life = life * (0.7 + this.rng.next() * 0.6);
+      p.maxLife = p.life;
+      p.size = size * (0.8 + this.rng.next() * 0.6);
+      p.color = color;
+      p.drag = 5;
+    }
+  }
+
+  // 카메라 셰이크 트리거 — 더 강한 셰이크가 약한 걸 덮어쓴다 (중첩 없음).
+  shake(duration: number, amplitude: number): void {
+    // 진행 중인 셰이크가 더 강하면 무시
+    const remainingAmp = this.shakeT > 0 ? this.shakeAmp * (this.shakeT / this.shakeMaxT) : 0;
+    if (amplitude < remainingAmp) return;
+    this.shakeT = duration;
+    this.shakeMaxT = duration;
+    this.shakeAmp = amplitude;
+  }
+
+  private updateShake(dt: number): void {
+    if (this.shakeT <= 0) {
+      this.cameraOffsetX = 0;
+      this.cameraOffsetY = 0;
+      return;
+    }
+    this.shakeT -= dt;
+    this.shakeTime += dt;
+    const decay = Math.max(0, this.shakeT / this.shakeMaxT);
+    // 빠르게 진동하면서 점점 잦아드는 톱니파형
+    const f1 = Math.sin(this.shakeTime * 62) * decay;
+    const f2 = Math.cos(this.shakeTime * 41) * decay;
+    this.cameraOffsetX = f1 * this.shakeAmp;
+    this.cameraOffsetY = f2 * this.shakeAmp;
+    if (this.shakeT <= 0) {
+      this.cameraOffsetX = 0;
+      this.cameraOffsetY = 0;
+    }
+  }
+
+  // 임팩트 발광 — 부드러운 글로우 점, 더 큰 사이즈
+  spawnImpactGlow(x: number, y: number, color: string, size: number): void {
+    const p = this.particles.acquire();
+    p.kind = 'glow';
+    p.x = x;
+    p.y = y;
+    p.vx = 0;
+    p.vy = 0;
+    p.life = 0.18;
+    p.maxLife = p.life;
+    p.size = size;
+    p.color = color;
+    p.drag = 0;
+  }
+
+  spawnText(x: number, y: number, text: string, color: string, life: number, size = 11): void {
     const t = this.texts.acquire();
     t.x = x;
     t.y = y;
@@ -850,6 +1055,14 @@ export class World {
     t.life = life;
     t.maxLife = life;
     t.color = color;
+    t.size = size;
+  }
+
+  // 데미지 텍스트 — 데미지 값에 따라 크기가 자동으로 커진다.
+  spawnDamageText(x: number, y: number, dmg: number, color: string, life = 0.5): void {
+    // 10 데미지 ≈ 10pt, 100 데미지 ≈ 18pt 정도로 부드러운 곡선
+    const size = Math.min(20, 9 + Math.log10(Math.max(1, dmg)) * 4.2);
+    this.spawnText(x, y, `${Math.round(dmg)}`, color, life, size);
   }
 
   private updateTexts(dt: number): void {

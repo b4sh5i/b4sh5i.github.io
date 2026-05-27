@@ -69,7 +69,8 @@ export interface SkillDef {
 export type SkillCastKind =
   | { kind: 'projectile' } // 가장 가까운 적을 향해 발사
   | { kind: 'orbit'; orbitRadius: number; rotationSpeed: number } // 플레이어 주위 회전 칼날
-  | { kind: 'aura'; tickInterval: number }; // 일정 주기로 주변 데미지
+  | { kind: 'aura'; tickInterval: number } // 일정 주기로 주변 데미지
+  | { kind: 'slash'; arcDeg: number; reach: number }; // 전방 부채꼴 즉시 강타 (근접)
 
 // === 서포트 젬 ===
 export interface SupportDef {

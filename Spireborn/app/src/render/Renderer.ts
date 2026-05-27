@@ -64,9 +64,9 @@ export class Renderer {
     ctx.fillStyle = '#050306';
     ctx.fillRect(0, 0, screenW, screenH);
 
-    // 2) 월드 변환 — 카메라(=플레이어 위치) 가 화면 중앙으로
-    const cx = world.cameraX;
-    const cy = world.cameraY;
+    // 2) 월드 변환 — 카메라(=플레이어 위치) 가 화면 중앙으로 + 셰이크 오프셋
+    const cx = world.cameraX + world.cameraOffsetX;
+    const cy = world.cameraY + world.cameraOffsetY;
     const tx = Math.floor(screenW / 2) - cx * this.zoom;
     const ty = Math.floor(screenH / 2) - cy * this.zoom;
     ctx.setTransform(
@@ -118,52 +118,127 @@ export class Renderer {
       });
     }
 
-    // 8) 투사체 — 글로우 + 코어
+    // 8) 투사체 — 다중 잔상 트레일 + 글로우 + 코어
     world.projectiles.forEachActive((p) => {
-      this.drawGlow(p.x, p.y, p.radius * 3.2, p.color, 0.6);
-      // 트레일
-      ctx.globalAlpha = 0.35;
-      this.drawGlow(p.x - p.vx * 0.018, p.y - p.vy * 0.018, p.radius * 2.4, p.color, 0.5);
+      // 5단계 트레일 잔상 (가까울수록 진함)
+      for (let i = 5; i >= 1; i--) {
+        const t = i / 5;
+        const dt = i * 0.012;
+        ctx.globalAlpha = 0.16 * (1 - t * 0.5);
+        this.drawGlow(
+          p.x - p.vx * dt,
+          p.y - p.vy * dt,
+          p.radius * (1.8 + (1 - t) * 1.8),
+          p.color,
+          0.5,
+        );
+      }
       ctx.globalAlpha = 1;
-      // 코어
+      // 본체 글로우
+      this.drawGlow(p.x, p.y, p.radius * 3.6, p.color, 0.7);
+      // 코어 — 흰색 핵
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius * 0.55, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.radius * 0.6, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    // 9) VFX — 오라/폭발의 빛 펄스
+    // 9) VFX — 링(오라/폭발) 또는 아크(근접 강타)
     world.vfx.forEachActive((v) => {
       const a = Math.max(0, v.life / v.maxLife);
-      // 바깥 글로우 링
-      ctx.globalAlpha = a * 0.5;
-      ctx.strokeStyle = v.color;
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
-      ctx.stroke();
-      // 내부 선명 링
-      ctx.globalAlpha = a;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+      if (v.kind === 'arc') {
+        const half = v.arcSpan / 2;
+        const start = v.angle - half;
+        const end = v.angle + half;
+        // 1) 외곽 두꺼운 발광 (블러 느낌)
+        ctx.globalAlpha = a * 0.55;
+        ctx.strokeStyle = v.color;
+        ctx.lineWidth = 10;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, v.radius, start, end);
+        ctx.stroke();
+        // 2) 부채꼴 채우기 (반투명)
+        ctx.globalAlpha = a * 0.38;
+        ctx.fillStyle = v.color;
+        ctx.beginPath();
+        ctx.moveTo(v.x, v.y);
+        ctx.arc(v.x, v.y, v.radius, start, end);
+        ctx.closePath();
+        ctx.fill();
+        // 3) 외곽 곡면 코어선
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = v.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, v.radius, start, end);
+        ctx.stroke();
+        // 4) 안쪽 흰 코어 검흔
+        ctx.globalAlpha = a * 0.9;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, v.radius * 0.96, start + 0.1, end - 0.1);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+        ctx.globalAlpha = 1;
+      } else {
+        // 바깥 글로우 링
+        ctx.globalAlpha = a * 0.5;
+        ctx.strokeStyle = v.color;
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // 내부 선명 링
+        ctx.globalAlpha = a;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
     });
+
+    // 9.5) 파티클 — 스파크/글로우. 가산 합성으로 화려하게.
+    ctx.globalCompositeOperation = 'lighter';
+    world.particles.forEachActive((p) => {
+      const a = Math.max(0, p.life / p.maxLife);
+      if (p.kind === 'glow') {
+        // 빠르게 페이드 아웃하는 큰 글로우
+        this.drawGlow(p.x, p.y, p.size, p.color, 0.8 * a);
+      } else {
+        // 점 스파크 — 진행 방향 짧은 꼬리
+        const trailLen = 0.025;
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = p.size;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx * trailLen, p.y - p.vy * trailLen);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+        ctx.globalAlpha = 1;
+      }
+    });
+    ctx.globalCompositeOperation = 'source-over';
 
     // 10) 플레이어 — 갑옷 입은 영웅
     this.drawPlayer(world);
 
-    // 11) 부유 텍스트
+    // 11) 부유 텍스트 — 데미지가 클수록 크게 보인다
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '700 11px "Times New Roman", serif';
     world.texts.forEachActive((t) => {
       const a = Math.max(0, t.life / t.maxLife);
+      // 등장 시 살짝 팝 — life 초반 0~20%에서 1.0→1.25 사이 펄스
+      const lifeT = t.life / t.maxLife;
+      const popK = lifeT > 0.8 ? 1 + (lifeT - 0.8) * 1.4 : 1;
+      ctx.font = `700 ${Math.round(t.size * popK)}px "Times New Roman", serif`;
       ctx.globalAlpha = a;
-      // 외곽선
       ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = Math.max(2.5, t.size * 0.28);
       ctx.strokeText(t.text, t.x, t.y);
       ctx.fillStyle = t.color;
       ctx.fillText(t.text, t.x, t.y);
