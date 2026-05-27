@@ -2,7 +2,8 @@
 // UI/입력/저장과 분리해 단위로 update/render만 호출되도록 한다.
 import type { RunState, SkillState } from '../types';
 import { getSkill } from '../data/skills';
-import { ENEMIES, spawnPoolFor } from '../data/enemies';
+import { bossPoolFor, spawnPoolFor } from '../data/enemies';
+import { listSupports } from '../data/supports';
 import { Pool } from '../util/pool';
 import { RNG } from '../util/rng';
 import {
@@ -14,13 +15,20 @@ import {
   FloatingText,
 } from './entities';
 import { specForFloor, currentSpawnInterval, FloorSpec } from './floor';
-import { computeBuild, ComputedBuild } from './build';
+import { computeBuild, ComputedBuild, makeSupportInstance } from './build';
 
 export interface WorldEvents {
   onPlayerHurt?: () => void;
-  onFloorCleared?: () => void;
+  onBossDefeated?: () => void;
+  onBonfireOpened?: () => void;
   onPlayerDead?: () => void;
 }
+
+// 보스 처치 후 화톳불이 드러나는 폭발 연출 길이.
+const BOSS_EXPLODE_TIME = 0.8;
+const BOSS_EXPLODE_RADIUS = 160;
+// NPC 와 인접하다고 판정하는 거리. 이 이내에서 상호작용 입력 시 정비 진입.
+export const NPC_INTERACT_RANGE = 60;
 
 // 한 층의 원형 아레나 반경 (월드 단위). 층마다 살짝 커지지만 화면 안에 들어가는 크기.
 export function arenaRadius(floor: number): number {
@@ -72,7 +80,17 @@ export class World {
   // 스폰 누적
   private spawnAccum = 0;
   private bossSpawned = false;
-  private bossActive = false;
+  // 보스 폭발 진행 시간 (역카운트). > 0 이면 폭발 연출 중.
+  private bossExplodeTime = 0;
+  private bossExplodePos = { x: 0, y: 0 };
+
+  // 화톳불 / NPC — 보스 처치 후 폭발이 끝나는 시점에 생성.
+  bonfire: { x: number; y: number; sparkPhase: number } | null = null;
+  npc: { x: number; y: number; bob: number } | null = null;
+  // NPC 와 상호작용 가능한 거리 안에 있는지 (Game 에서 프롬프트 표시용)
+  npcInRange = false;
+  // 외부에서 누른 상호작용 입력 (E / 탭). update에서 소비.
+  private interactQueued = false;
 
   // 입력 방향 (정규화된 -1..1)
   inputX = 0;
@@ -116,7 +134,11 @@ export class World {
     this.rng = new RNG(this.runSeedForFloor());
     this.spawnAccum = 0;
     this.bossSpawned = false;
-    this.bossActive = false;
+    this.bossExplodeTime = 0;
+    this.bonfire = null;
+    this.npc = null;
+    this.npcInRange = false;
+    this.interactQueued = false;
     this.enemies.clear();
     this.projectiles.clear();
     this.creditOrbs.clear();
@@ -127,6 +149,11 @@ export class World {
     this.nextCast = 0;
     this.auraTick = 0;
     this.refreshOrbitBlades();
+  }
+
+  // 외부(키보드/탭)에서 상호작용 요청. update에서 phase/거리 조건 만족 시 'bonfire' 전환.
+  queueInteract(): void {
+    this.interactQueued = true;
   }
 
   private runSeedForFloor(): number {
@@ -144,7 +171,7 @@ export class World {
   }
 
   private refreshOrbitBlades(): void {
-    const def = getSkill(this.run.mainSkillId);
+    const def = getSkill(this.run.mainSkill.defId);
     if (def.cast.kind !== 'orbit') {
       this.orbits.clear();
       return;
@@ -187,9 +214,11 @@ export class World {
   }
 
   update(dt: number): void {
-    if (this.paused || this.run.phase !== 'fighting') return;
+    if (this.paused) return;
+    const phase = this.run.phase;
+    if (phase === 'dead' || phase === 'bonfire') return;
 
-    // 플레이어 이동
+    // 플레이어 이동 / 카메라 / 무적 — fighting · boss · bossfire 모두 동일
     const ps = this.build.player;
     const moveMag = Math.hypot(this.inputX, this.inputY);
     this.player.x += this.inputX * ps.moveSpeed * dt;
@@ -197,7 +226,7 @@ export class World {
     if (this.player.invuln > 0) this.player.invuln -= dt;
     if (this.player.flash > 0) this.player.flash -= dt;
 
-    // 바라보는 방향 — 이동 중이면 진행 방향, 정지하면 최근 타겟쪽
+    // 바라보는 방향 — 이동 중이면 진행 방향, 정지하면 가장 가까운 적쪽
     if (moveMag > 0.05) {
       this.player.facing = Math.atan2(this.inputY, this.inputX);
       this.player.stepPhase += dt * 8 * moveMag;
@@ -206,6 +235,11 @@ export class World {
       if (tgt) {
         const dx = tgt.x - this.player.x;
         const dy = tgt.y - this.player.y;
+        this.player.facing = Math.atan2(dy, dx);
+      } else if (this.npc) {
+        // 적이 없을 땐 NPC 쪽을 바라본다 (자연스러운 휴식 톤)
+        const dx = this.npc.x - this.player.x;
+        const dy = this.npc.y - this.player.y;
         this.player.facing = Math.atan2(dy, dx);
       }
     }
@@ -219,59 +253,80 @@ export class World {
       this.player.y = (this.player.y / pd) * limit;
     }
 
-    // 카메라 — 플레이어 추적 (모바일에서 캐릭터가 화면 밖으로 나가지 않게 고정 뷰)
+    // 카메라 — 플레이어 추적
     this.cameraX = this.player.x;
     this.cameraY = this.player.y;
 
-    // 시간 진행 / 보스 트리거
-    this.run.floorElapsedSec += dt;
-    this.run.timeAliveSec += dt;
-    if (
-      !this.bossSpawned &&
-      this.run.floorElapsedSec >= this.floorSpec.durationSec
-    ) {
-      this.spawnBoss();
-    }
-
-    // 적 스폰 (보스 등장 후엔 잡몹 스폰 멈춤)
-    if (!this.bossActive) {
-      this.spawnAccum += dt;
-      const interval = currentSpawnInterval(
-        this.floorSpec,
-        this.run.floorElapsedSec,
-      );
-      while (this.spawnAccum >= interval) {
-        this.spawnAccum -= interval;
-        this.spawnEnemyRandom();
-      }
-    }
-
-    // 자동 시전
-    this.autoCast(dt);
-
-    // 적 업데이트
-    this.updateEnemies(dt);
-
-    // 투사체 업데이트
-    this.updateProjectiles(dt);
-
-    // 회전 칼날
-    this.updateOrbits(dt);
-
-    // 크레딧 오브
-    this.updateCreditOrbs(dt);
-
-    // 시각 효과
+    // 시각 효과 / 부유 텍스트 / 크레딧 오브는 항상 진행
     this.updateVfx(dt);
     this.updateTexts(dt);
+    this.updateCreditOrbs(dt);
 
-    // 모든 적 사라지고 보스도 죽었으면 클리어
-    if (this.bossSpawned && !this.bossActive && this.enemies.countActive() === 0) {
-      this.run.phase = 'cleared';
-      this.events.onFloorCleared?.();
+    if (phase === 'fighting') {
+      this.run.floorElapsedSec += dt;
+      this.run.timeAliveSec += dt;
+      // 보스 등장 트리거
+      if (
+        !this.bossSpawned &&
+        this.run.floorElapsedSec >= this.floorSpec.durationSec
+      ) {
+        this.spawnBoss();
+      } else {
+        // 잡몹 스폰
+        this.spawnAccum += dt;
+        const interval = currentSpawnInterval(
+          this.floorSpec,
+          this.run.floorElapsedSec,
+        );
+        while (this.spawnAccum >= interval) {
+          this.spawnAccum -= interval;
+          this.spawnEnemyRandom();
+        }
+      }
+      this.autoCast(dt);
+      this.updateEnemies(dt);
+      this.updateProjectiles(dt);
+      this.updateOrbits(dt);
+    } else if (phase === 'boss') {
+      this.run.timeAliveSec += dt;
+      // 보스 등장 후엔 잡몹 스폰 정지. 적/투사체/스킬은 그대로 동작.
+      this.autoCast(dt);
+      this.updateEnemies(dt);
+      this.updateProjectiles(dt);
+      this.updateOrbits(dt);
+    } else if (phase === 'bossfire') {
+      this.run.timeAliveSec += dt;
+      // 폭발 카운트다운 — 끝나면 화톳불 + NPC 드러남
+      if (this.bossExplodeTime > 0) {
+        this.bossExplodeTime -= dt;
+        if (this.bossExplodeTime <= 0) {
+          this.bossExplodeTime = 0;
+          this.spawnBonfire(this.bossExplodePos.x, this.bossExplodePos.y);
+        }
+      }
+      // 화톳불 / NPC 애니메이션 진행
+      if (this.bonfire) this.bonfire.sparkPhase += dt;
+      if (this.npc) this.npc.bob += dt;
+      // NPC 인접 + 상호작용 입력 → 정비 진입
+      this.npcInRange = false;
+      if (this.npc) {
+        const dx = this.npc.x - this.player.x;
+        const dy = this.npc.y - this.player.y;
+        const d = Math.hypot(dx, dy);
+        this.npcInRange = d <= NPC_INTERACT_RANGE;
+        if (this.npcInRange && this.interactQueued) {
+          this.run.phase = 'bonfire';
+          this.events.onBonfireOpened?.();
+        }
+      }
+      // 남은 적 / 투사체 / 칼날도 마저 정리되도록 갱신
+      this.updateEnemies(dt);
+      this.updateProjectiles(dt);
+      this.updateOrbits(dt);
     }
+    this.interactQueued = false;
 
-    // 사망 체크
+    // 사망 체크 — 어느 phase에서든 동일
     if (this.run.playerHp <= 0) {
       this.run.phase = 'dead';
       this.events.onPlayerDead?.();
@@ -304,8 +359,10 @@ export class World {
 
   private spawnBoss(): void {
     this.bossSpawned = true;
-    this.bossActive = true;
-    const def = ENEMIES.boss;
+    this.run.phase = 'boss';
+    // 보스 풀에서 추첨 — 같은 층에선 결정적 시드로 같은 보스 유지
+    const pool = bossPoolFor(this.run.floor);
+    const def = this.rng.pick(pool);
     const e = this.enemies.acquire();
     e.def = def;
     e.hp = def.hp * this.floorSpec.bossHpMul;
@@ -321,18 +378,37 @@ export class World {
     e.y = Math.sin(angle) * radius;
     this.enemyIds.delete(e);
     this.getEnemyId(e);
+    this.spawnText(e.x, e.y - 40, `${def.name} 등장`, def.color, 1.8);
+  }
+
+  private spawnBonfire(x: number, y: number): void {
+    this.bonfire = { x, y, sparkPhase: 0 };
+    // NPC 는 화톳불 옆 (오른쪽으로 약간 떨어져)
+    this.npc = { x: x + 42, y: y + 6, bob: 0 };
+    this.spawnText(x, y - 28, '화톳불 점화', '#ffa760', 2.0);
+  }
+
+  // 보스 드랍: Phase 2 단독 빌드용 임시 — 미보유 서포트 중 1개를 자동 인벤토리 추가.
+  // 추후 Phase 3 의 상점 구매 / 소켓 UI 와 통합되면 제거.
+  private dropBossSupport(): void {
+    const already = new Set(this.run.supports.map((s) => s.defId));
+    const pool = listSupports().filter((s) => !already.has(s.id));
+    if (pool.length === 0) return;
+    const def = pool[Math.floor(this.rng.next() * pool.length)];
+    this.run.supports.push(makeSupportInstance(def.id));
+    this.rebuild();
     this.spawnText(
-      e.x,
-      e.y - 40,
-      `${def.name} 등장`,
-      '#ff5577',
-      1.6,
+      this.player.x,
+      this.player.y - 50,
+      `+ 서포트 ${def.name}`,
+      '#c8a4ff',
+      2.4,
     );
   }
 
   // === 자동 시전 ===
   private autoCast(dt: number): void {
-    const def = getSkill(this.run.mainSkillId);
+    const def = getSkill(this.run.mainSkill.defId);
     const s = this.build.skill;
     if (def.cast.kind === 'projectile') {
       this.nextCast -= dt;
@@ -574,7 +650,7 @@ export class World {
 
   // === 회전 칼날 ===
   private updateOrbits(dt: number): void {
-    const def = getSkill(this.run.mainSkillId);
+    const def = getSkill(this.run.mainSkill.defId);
     if (def.cast.kind !== 'orbit') return;
     const s = this.build.skill;
     const orbitR = def.cast.orbitRadius * s.areaMul;
@@ -623,13 +699,33 @@ export class World {
   // === 적 처치 ===
   private killEnemy(e: Enemy, byProj: Projectile | null): void {
     const def = e.def;
-    // 보스였다면
-    if (def.id === 'boss') {
-      this.bossActive = false;
-    }
-    // 폭발
-    if (byProj?.explodeOnKill && byProj.explodeRadius > 0) {
-      this.explosion(e.x, e.y, byProj.explodeRadius, byProj.damage * byProj.explodeDamageMul);
+    const isBoss = def.role === 'boss';
+    if (isBoss) {
+      // 보스 폭발 연출 시작 → bossfire phase 전환
+      this.run.phase = 'bossfire';
+      this.bossExplodeTime = BOSS_EXPLODE_TIME;
+      this.bossExplodePos = { x: e.x, y: e.y };
+      // 큰 광역 폭발 이펙트 (시각)
+      this.explosion(e.x, e.y, BOSS_EXPLODE_RADIUS, def.damage * 1.5);
+      // 남은 잡몹은 폭발 충격으로 모두 소멸 — NPC 휴식 시간 확보
+      this.enemies.forEachActive((other) => {
+        if (other.def.role === 'boss') return;
+        if (other.hp <= 0) return;
+        other.hp = 0;
+        this.killEnemy(other, null);
+      });
+      // 클리어 보너스 크레딧
+      this.run.credits += this.floorSpec.creditClearBonus;
+      // 임시 보스 드랍 — 미보유 서포트 1 개 자동 인벤토리 추가
+      this.dropBossSupport();
+      this.events.onBossDefeated?.();
+    } else if (byProj?.explodeOnKill && byProj.explodeRadius > 0) {
+      this.explosion(
+        e.x,
+        e.y,
+        byProj.explodeRadius,
+        byProj.damage * byProj.explodeDamageMul,
+      );
     }
     // 크레딧 오브 드랍
     this.spawnCreditOrb(e.x, e.y, def.credits);

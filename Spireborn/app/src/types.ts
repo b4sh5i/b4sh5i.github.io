@@ -102,14 +102,34 @@ export interface SupportInstance {
   values: Record<string, number>;
 }
 
+// === 메인 스킬 인스턴스 (Phase 3) ===
+// PoE2 식 내장 소켓. 소켓 0 은 항상 메인 스킬 자리 — socketed[0] = null.
+// links[i] = true 면 socket i 와 socket i+1 사이가 연결.
+// links 의 길이는 sockets - 1.
+export interface SkillInstance {
+  defId: string;
+  sockets: number;           // 3..6
+  links: boolean[];          // length = sockets - 1
+  socketed: (SupportInstance | null)[]; // length = sockets, [0]은 null
+}
+
 // === 아이템 ===
-export interface ItemDef {
+export type ItemSlot = 'weapon' | 'amulet' | 'ring';
+
+// 아이템 모드(접두/접미) — Phase 4. ItemDef는 더 이상 정적 카탈로그가 아니라 모드 풀에서 굴려서 만든다.
+export interface ItemMod {
+  affixId: string; // 모드 정의 id (affixes.ts 의 AffixMod.id)
+  roll: number;    // 실제 적용된 값
+  tier: number;    // 1 = 가장 강함, 5 = 가장 약함
+}
+
+export interface ItemInstance {
   id: string;
-  name: string;
-  description: string;
-  slot: 'weapon' | 'amulet' | 'ring';
-  // 아이템도 SkillState/PlayerStats 양쪽에 영향을 줄 수 있다.
-  apply: (ctx: ItemApplyCtx) => void;
+  slot: ItemSlot;
+  name: string;          // 모드에 따라 자동 생성
+  prefixes: ItemMod[];   // 최대 2
+  suffixes: ItemMod[];   // 최대 2
+  enhanced: boolean;     // 강화 1회 사용 여부 (한 아이템당 1회)
 }
 
 export interface PlayerStats {
@@ -134,9 +154,13 @@ export interface ItemApplyCtx {
 }
 
 // === 적 ===
+export type EnemyRole = 'normal' | 'boss';
+
 export interface EnemyDef {
   id: string;
   name: string;
+  // 'boss'면 보스 풀에 속하고 처치 시 화톳불을 점화한다. 비우면 'normal'.
+  role?: EnemyRole;
   hp: number;
   damage: number;
   moveSpeed: number; // px/s
@@ -155,13 +179,20 @@ export interface RunState {
   seed: number;
   floor: number;
   // 진행 단계
-  phase: 'fighting' | 'cleared' | 'levelup' | 'maintenance' | 'dead';
+  // fighting: 잡몹 웨이브
+  // boss: 잡몹 정지, 보스 1마리
+  // bossfire: 보스 처치 후 폭발/화톳불 휴식 (NPC 상호작용 대기)
+  // bonfire: NPC와 상호작용해 정비 UI 열림
+  // dead: 사망
+  phase: 'fighting' | 'boss' | 'bossfire' | 'bonfire' | 'dead';
   // 플레이어
   playerHp: number;
-  // 빌드
-  mainSkillId: string;
+  // 빌드 (Phase 3 이후)
+  mainSkill: SkillInstance;
+  // supports = 미장착 서포트 인벤토리. 소켓에 박힌 것은 mainSkill.socketed[i] 에 있음.
   supports: SupportInstance[];
-  itemIds: string[];
+  // 장착 아이템 (Phase 4 이후 ItemInstance 기반)
+  items: ItemInstance[];
   // 크레딧 — 잡몹 처치로 획득, 정비 옵션 강화에 사용
   credits: number;
   // 누적 통계

@@ -27,10 +27,23 @@ export class Hud {
     this.set('[data-hp]', hpPct * 100, '%');
     this.text('[data-hp-text]', `${Math.max(0, Math.round(world.run.playerHp))}/${Math.round(ps.maxHp)}`);
     this.text('[data-floor]', `층 ${world.run.floor}`);
-    const sec = Math.max(0, world.floorSpec.durationSec - world.run.floorElapsedSec);
-    const mm = Math.floor(sec / 60);
-    const ss = Math.floor(sec % 60).toString().padStart(2, '0');
-    this.text('[data-timer]', `${mm}:${ss}`);
+    // phase 에 따라 타이머 자리에 다른 정보 표시
+    const phase = world.run.phase;
+    let timerText: string;
+    if (phase === 'boss') {
+      timerText = '★ 보스 ★';
+    } else if (phase === 'bossfire') {
+      timerText = '화톳불';
+    } else {
+      const sec = Math.max(
+        0,
+        world.floorSpec.durationSec - world.run.floorElapsedSec,
+      );
+      const mm = Math.floor(sec / 60);
+      const ss = Math.floor(sec % 60).toString().padStart(2, '0');
+      timerText = `${mm}:${ss}`;
+    }
+    this.text('[data-timer]', timerText);
     this.text('[data-credits]', `${world.run.credits}c`);
     this.text('[data-kills]', `${world.run.killsTotal}킬`);
   }

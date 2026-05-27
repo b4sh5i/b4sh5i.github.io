@@ -101,8 +101,12 @@ export class Renderer {
       this.drawEnemy(e);
     });
 
+    // 6.5) 화톳불 + NPC (보스 처치 후 표시) — 적 아래, 투사체 위
+    if (world.bonfire) this.drawBonfire(world.bonfire);
+    if (world.npc) this.drawNpc(world.npc, world.npcInRange);
+
     // 7) 회전 칼날 — 빛나는 검신
-    const def = getSkill(world.run.mainSkillId);
+    const def = getSkill(world.run.mainSkill.defId);
     if (def.cast.kind === 'orbit') {
       const s = world.build.skill;
       const orbitR = def.cast.orbitRadius * s.areaMul;
@@ -505,9 +509,10 @@ export class Renderer {
     ctx.stroke();
 
     // 타입별 디테일
-    if (def.id === 'brute' || def.id === 'boss') {
+    const isBoss = def.role === 'boss';
+    if (def.id === 'brute' || isBoss) {
       // 가시 / 뿔
-      const spikes = def.id === 'boss' ? 8 : 5;
+      const spikes = isBoss ? 8 : 5;
       ctx.fillStyle = darkCol;
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 0.8;
@@ -515,8 +520,8 @@ export class Renderer {
         const a = (i / spikes) * Math.PI * 2 - Math.PI / 2;
         const x1 = e.x + Math.cos(a) * r;
         const y1 = e.y + Math.sin(a) * r;
-        const x2 = e.x + Math.cos(a) * (r + (def.id === 'boss' ? 9 : 5));
-        const y2 = e.y + Math.sin(a) * (r + (def.id === 'boss' ? 9 : 5));
+        const x2 = e.x + Math.cos(a) * (r + (isBoss ? 9 : 5));
+        const y2 = e.y + Math.sin(a) * (r + (isBoss ? 9 : 5));
         const lx = -Math.sin(a) * 2.4;
         const ly = Math.cos(a) * 2.4;
         ctx.beginPath();
@@ -545,7 +550,7 @@ export class Renderer {
 
     // 빛나는 눈 — 적의 정수
     const eyeCol = def.id === 'caster' ? '#cba8ff' :
-                   def.id === 'boss' ? '#ff5566' :
+                   isBoss ? '#ff5566' :
                    '#ffae3d';
     const ed = Math.max(2, r * 0.3);
     ctx.fillStyle = eyeCol;
@@ -565,22 +570,150 @@ export class Renderer {
     }
 
     // 체력 바
-    if (def.id === 'boss' || e.hp < e.maxHp) {
+    if (isBoss || e.hp < e.maxHp) {
       const bw = Math.max(18, r * 2.4);
-      const bh = def.id === 'boss' ? 4 : 3;
+      const bh = isBoss ? 4 : 3;
       const bx = e.x - bw / 2;
       const by = e.y - r - 7;
       ctx.fillStyle = 'rgba(0,0,0,0.78)';
       ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
-      ctx.fillStyle = def.id === 'boss' ? '#a8112a' : '#5a1620';
+      ctx.fillStyle = isBoss ? '#a8112a' : '#5a1620';
       ctx.fillRect(bx, by, bw, bh);
       const pct = Math.max(0, e.hp / e.maxHp);
-      const fillCol = def.id === 'boss' ? '#ff3859' : '#ff8c8c';
+      const fillCol = isBoss ? '#ff3859' : '#ff8c8c';
       ctx.fillStyle = fillCol;
       ctx.fillRect(bx, by, bw * pct, bh);
       // 하이라이트
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.fillRect(bx, by, bw * pct, 1);
+    }
+  }
+
+  // === 화톳불 ===
+  private drawBonfire(bf: { x: number; y: number; sparkPhase: number }): void {
+    const ctx = this.ctx;
+    const t = bf.sparkPhase;
+    // 바닥 그림자 / 잔재
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(bf.x, bf.y + 6, 22, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 통나무 (X 자 배치)
+    ctx.strokeStyle = '#2a1810';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(bf.x - 14, bf.y + 4);
+    ctx.lineTo(bf.x + 14, bf.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bf.x - 12, bf.y);
+    ctx.lineTo(bf.x + 14, bf.y + 5);
+    ctx.stroke();
+    ctx.strokeStyle = '#4a2810';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(bf.x - 14, bf.y + 4);
+    ctx.lineTo(bf.x + 14, bf.y);
+    ctx.stroke();
+    // 글로우 (깜빡임 — sparkPhase 로 강도 변조)
+    const flicker = 0.85 + Math.sin(t * 14) * 0.1 + Math.sin(t * 7.3) * 0.05;
+    this.drawGlow(bf.x, bf.y - 4, 42 * flicker, '#ff8c44', 0.7);
+    this.drawGlow(bf.x, bf.y - 8, 26 * flicker, '#ffd86b', 0.8);
+    // 불꽃 — 위로 흔들리는 삼각형
+    const flames = 5;
+    for (let i = 0; i < flames; i++) {
+      const off = (i / flames - 0.5) * 12;
+      const sway = Math.sin(t * 6 + i * 1.7) * 2.4;
+      const h = 14 + Math.sin(t * 5 + i * 2.1) * 4 + i * 1.5;
+      const fx = bf.x + off + sway;
+      const fy = bf.y - 2;
+      const col = i % 2 === 0 ? '#ffb348' : '#ff6a1c';
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(fx - 3, fy);
+      ctx.quadraticCurveTo(fx - 1, fy - h * 0.5, fx, fy - h);
+      ctx.quadraticCurveTo(fx + 1, fy - h * 0.5, fx + 3, fy);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // 내부 흰 코어
+    ctx.fillStyle = `rgba(255, 245, 200, ${0.7 + Math.sin(t * 12) * 0.2})`;
+    ctx.beginPath();
+    ctx.ellipse(bf.x, bf.y - 6, 4, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 떠오르는 불티
+    for (let i = 0; i < 4; i++) {
+      const ph = (t * 0.9 + i * 0.5) % 1;
+      const sx = bf.x + Math.sin(t * 2 + i) * 8;
+      const sy = bf.y - 12 - ph * 30;
+      ctx.fillStyle = `rgba(255, 200, 120, ${1 - ph})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // === NPC (후드 실루엣) ===
+  private drawNpc(
+    npc: { x: number; y: number; bob: number },
+    inRange: boolean,
+  ): void {
+    const ctx = this.ctx;
+    const bob = Math.sin(npc.bob * 1.6) * 0.8;
+    const x = npc.x;
+    const y = npc.y + bob;
+    // 그림자
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 12, 11, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 인접 상태면 미묘한 글로우
+    if (inRange) {
+      this.drawGlow(x, y, 36, '#d4a64a', 0.35);
+    }
+    // 로브 (사다리꼴)
+    ctx.fillStyle = '#1a0e22';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y - 4);
+    ctx.lineTo(x + 5, y - 4);
+    ctx.lineTo(x + 9, y + 12);
+    ctx.lineTo(x - 9, y + 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // 후드 (상단 둥근 그늘)
+    ctx.fillStyle = '#0e0616';
+    ctx.beginPath();
+    ctx.arc(x, y - 6, 6.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // 가슴 매듭 — 골드 점
+    ctx.fillStyle = '#d4a64a';
+    ctx.beginPath();
+    ctx.arc(x, y + 2, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    // 후드 안 빛나는 눈
+    ctx.fillStyle = inRange ? '#f4d486' : '#7a5a1a';
+    ctx.beginPath();
+    ctx.arc(x - 1.6, y - 5, 0.9, 0, Math.PI * 2);
+    ctx.arc(x + 1.6, y - 5, 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    // 근접 시 머리 위 프롬프트
+    if (inRange) {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '700 9px "Times New Roman", serif';
+      const py = y - 20 + Math.sin(npc.bob * 3) * 1.2;
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.lineWidth = 3;
+      ctx.strokeText('E / 탭하여 정비', x, py);
+      ctx.fillStyle = '#f4d486';
+      ctx.fillText('E / 탭하여 정비', x, py);
+      ctx.restore();
     }
   }
 

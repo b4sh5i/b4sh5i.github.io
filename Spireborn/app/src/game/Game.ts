@@ -1,11 +1,11 @@
 // 메인 게임 컨트롤러. 루프 + 상태 머신.
-// 흐름: title → (룰렛으로 메인 스킬 결정) → fighting → cleared → levelup → maintenance → 다음 층
-import type { RunState, MetaState } from '../types';
+// 흐름: title → (룰렛으로 메인 스킬 결정) → fighting → boss → bossfire (화톳불) → bonfire (정비) → 다음 층
+import type { ItemInstance, MetaState, RunState } from '../types';
 import { World } from './World';
 import { Renderer } from '../render/Renderer';
 import { Joystick } from '../input/Joystick';
 import { Hud } from '../ui/Hud';
-import { Overlay, pickItemRewards, newSupportInstance } from '../ui/Overlay';
+import { Overlay } from '../ui/Overlay';
 import { defaultMetaState, defaultPlayerStats } from '../types';
 import {
   clearRun,
@@ -15,7 +15,13 @@ import {
   saveMeta,
   saveRun,
 } from '../save/Storage';
-import { randomSeed } from '../util/rng';
+import { RNG, randomSeed } from '../util/rng';
+import { defaultSkillInstance, rollItemRandomSlot } from './shop';
+
+// 전투/이동이 일어나는 phase — 저장 정책에 사용
+function isActivePhase(phase: RunState['phase']): boolean {
+  return phase === 'fighting' || phase === 'boss' || phase === 'bossfire';
+}
 
 export class Game {
   private renderer: Renderer;
@@ -28,13 +34,17 @@ export class Game {
   private lastT = 0;
   private saveAccum = 0;
   // 현재 정비 화면에서 제안된 아이템 (한 번만 보여주려고 보관)
-  private currentItemRewards: string[] = [];
+  private currentItemRewards: ItemInstance[] = [];
+  // 화톳불 NPC 와 인접했을 때 표시되는 외부 프롬프트
+  private bonfirePrompt: HTMLElement;
+  private bonfirePromptVisible = false;
 
   constructor() {
     const canvas = document.getElementById('game') as HTMLCanvasElement;
     const hudEl = document.getElementById('hud') as HTMLElement;
     const overlayEl = document.getElementById('overlay') as HTMLElement;
     const joyEl = document.getElementById('joystick') as HTMLElement;
+    this.bonfirePrompt = document.getElementById('bonfire-prompt') as HTMLElement;
 
     this.renderer = new Renderer(canvas);
     this.joystick = new Joystick(joyEl);
@@ -43,13 +53,33 @@ export class Game {
 
     window.addEventListener('resize', () => this.renderer.resize());
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.world && this.world.run.phase === 'fighting') {
+      if (document.hidden && this.world && isActivePhase(this.world.run.phase)) {
         saveRun(this.world.run);
       }
+    });
+    // 키보드 상호작용 — E / Space / Enter
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;
+      const k = e.key;
+      if (k === 'e' || k === 'E' || k === ' ' || k === 'Enter') {
+        this.tryInteract();
+      }
+    });
+    // 외부 프롬프트 버튼 클릭 (터치/마우스)
+    this.bonfirePrompt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.tryInteract();
     });
 
     this.renderer.resize();
     this.meta = loadMeta();
+  }
+
+  private tryInteract(): void {
+    if (!this.world) return;
+    if (this.world.run.phase !== 'bossfire') return;
+    if (!this.world.npcInRange) return;
+    this.world.queueInteract();
   }
 
   start(): void {
@@ -80,9 +110,9 @@ export class Game {
       floor: 1,
       phase: 'fighting',
       playerHp: defaultPlayerStats().maxHp,
-      mainSkillId,
+      mainSkill: defaultSkillInstance(mainSkillId),
       supports: [],
-      itemIds: [],
+      items: [],
       credits: 0,
       killsTotal: 0,
       timeAliveSec: 0,
@@ -94,7 +124,8 @@ export class Game {
   private loadIntoWorld(run: RunState): void {
     this.world = new World(run, {
       onPlayerHurt: () => {},
-      onFloorCleared: () => this.handleFloorCleared(),
+      onBossDefeated: () => this.handleBossDefeated(),
+      onBonfireOpened: () => this.handleBonfireOpened(),
       onPlayerDead: () => this.handleDead(),
     });
     this.world.setView(this.renderer.viewW, this.renderer.viewH);
@@ -102,42 +133,28 @@ export class Game {
     saveRun(run);
   }
 
-  // 층 클리어 시: 서포트 젬 1택 → 정비 → 다음 층
-  private handleFloorCleared(): void {
+  // 보스 처치 시점에 호출. phase는 World가 이미 'bossfire'로 전환.
+  private handleBossDefeated(): void {
     if (!this.world) return;
-    const w = this.world;
-    // 클리어 보너스 크레딧
-    w.run.credits += w.floorSpec.creditClearBonus;
-    w.run.phase = 'levelup';
-    w.paused = true;
-    saveRun(w.run);
-
-    this.overlay.showLevelUp({
-      run: w.run,
-      onPick: (defId) => {
-        if (defId) {
-          if (!w.run.supports.find((s) => s.defId === defId)) {
-            w.run.supports.push(newSupportInstance(defId));
-          }
-          w.rebuild();
-          w.run.playerHp = Math.min(w.run.playerHp, w.build.player.maxHp);
-        }
-        // 아이템 보상 후보 결정
-        this.currentItemRewards =
-          Math.random() < w.floorSpec.itemRewardChance ? pickItemRewards() : [];
-        w.run.phase = 'maintenance';
-        saveRun(w.run);
-        this.showMaintenance();
-      },
-    });
+    // 보스 드랍 — 항상 ItemInstance 2 개 후보. 슬롯은 균등 추첨, 모드는 affix 풀에서 굴림.
+    const rng = new RNG(randomSeed());
+    const floor = this.world.run.floor;
+    this.currentItemRewards = [
+      rollItemRandomSlot(floor, rng),
+      rollItemRandomSlot(floor, rng),
+    ];
+    saveRun(this.world.run);
   }
 
-  private showMaintenance(): void {
+  // NPC 와 상호작용해 정비 UI 진입.
+  private handleBonfireOpened(): void {
     if (!this.world) return;
     const w = this.world;
+    w.paused = true;
+    saveRun(w.run);
     this.overlay.showMaintenance({
       run: w.run,
-      itemRewardIds: this.currentItemRewards,
+      itemRewards: this.currentItemRewards,
       onChange: () => {
         w.rebuild();
         w.run.playerHp = Math.min(w.run.playerHp, w.build.player.maxHp);
@@ -146,7 +163,6 @@ export class Game {
       onContinue: () => {
         // 다음 층으로
         w.run.floor += 1;
-        w.run.phase = 'fighting';
         // 회복: 다음 층 시작 시 최대 체력의 30% 회복 (영구 강화 아님)
         w.run.playerHp = Math.min(
           w.build.player.maxHp,
@@ -197,7 +213,7 @@ export class Game {
       this.world.setInput(dir.x, dir.y);
       this.world.update(dt);
 
-      if (this.world.run.phase === 'fighting') {
+      if (isActivePhase(this.world.run.phase)) {
         this.saveAccum += dt;
         if (this.saveAccum >= 2) {
           this.saveAccum = 0;
@@ -205,9 +221,21 @@ export class Game {
         }
       }
 
+      // 화톳불 프롬프트 — bossfire phase + NPC 인접 시에만 표시
+      const showPrompt =
+        this.world.run.phase === 'bossfire' && this.world.npcInRange;
+      if (showPrompt !== this.bonfirePromptVisible) {
+        this.bonfirePromptVisible = showPrompt;
+        this.bonfirePrompt.classList.toggle('hidden', !showPrompt);
+      }
+
       this.renderer.render(this.world);
       this.hud.update(this.world);
     } else {
+      if (this.bonfirePromptVisible) {
+        this.bonfirePromptVisible = false;
+        this.bonfirePrompt.classList.add('hidden');
+      }
       const ctx = this.renderer.ctx;
       ctx.setTransform(this.renderer.dpr, 0, 0, this.renderer.dpr, 0, 0);
       ctx.fillStyle = '#0a0a0f';

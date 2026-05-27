@@ -1,5 +1,6 @@
 // 런의 빌드 상태로부터 최종 SkillState / PlayerStats를 계산한다.
-// 서포트 옵션과 아이템이 매 변경 시 다시 합산된다.
+// Phase 3: 메인 스킬의 소켓 중 소켓 0 과 링크로 연결된 소켓만 활성.
+// Phase 4: 아이템은 ItemInstance.prefixes / suffixes 의 모드를 적용.
 import type {
   PlayerStats,
   RunState,
@@ -9,11 +10,31 @@ import type {
 import { defaultPlayerStats, defaultSkillState } from '../types';
 import { getSkill } from '../data/skills';
 import { getSupport } from '../data/supports';
-import { getItem } from '../data/items';
+import { getAffix } from '../data/affixes';
 
 export interface ComputedBuild {
   player: PlayerStats;
   skill: SkillState;
+}
+
+// 소켓 0 에서 인접 + link 가 true 인 소켓을 따라 BFS.
+function reachableSockets(skill: RunState['mainSkill']): boolean[] {
+  const n = skill.sockets;
+  const reached = new Array<boolean>(n).fill(false);
+  reached[0] = true;
+  const queue: number[] = [0];
+  while (queue.length > 0) {
+    const i = queue.shift()!;
+    if (i > 0 && skill.links[i - 1] && !reached[i - 1]) {
+      reached[i - 1] = true;
+      queue.push(i - 1);
+    }
+    if (i < n - 1 && skill.links[i] && !reached[i + 1]) {
+      reached[i + 1] = true;
+      queue.push(i + 1);
+    }
+  }
+  return reached;
 }
 
 export function computeBuild(run: RunState): ComputedBuild {
@@ -21,17 +42,27 @@ export function computeBuild(run: RunState): ComputedBuild {
   const player = defaultPlayerStats();
 
   // 메인 스킬의 색 적용 (시각 기본값)
-  const def = getSkill(run.mainSkillId);
+  const def = getSkill(run.mainSkill.defId);
   skill.color = def.color;
 
-  // 서포트 적용
-  for (const inst of run.supports) {
-    applySupport(inst, skill);
+  // 활성 소켓의 서포트만 적용
+  const reached = reachableSockets(run.mainSkill);
+  for (let i = 1; i < run.mainSkill.sockets; i++) {
+    if (!reached[i]) continue;
+    const inst = run.mainSkill.socketed[i];
+    if (inst) applySupport(inst, skill);
   }
 
-  // 아이템 적용
-  for (const id of run.itemIds) {
-    getItem(id).apply({ player, skill });
+  // 아이템 적용 — 접두/접미 모든 모드
+  for (const item of run.items) {
+    for (const mod of item.prefixes) {
+      const def = getAffix(mod.affixId);
+      if (def) def.apply({ player, skill }, mod.roll);
+    }
+    for (const mod of item.suffixes) {
+      const def = getAffix(mod.affixId);
+      if (def) def.apply({ player, skill }, mod.roll);
+    }
   }
 
   // 안전 가드

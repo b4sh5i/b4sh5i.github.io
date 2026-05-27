@@ -361,6 +361,79 @@ canvas#game {
   display: none;
 }
 
+/* === 화톳불 NPC 상호작용 프롬프트 === */
+#bonfire-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 56px);
+  transform: translateX(-50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 12px;
+  font: inherit;
+  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 13px;
+  background:
+    linear-gradient(180deg, #f0c970 0%, #d4a64a 45%, #8b6a2a 100%);
+  color: #1a0f04;
+  border: 1px solid #000;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px var(--gold-dark) inset,
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.3) inset,
+    0 4px 12px rgba(0, 0, 0, 0.65),
+    0 0 24px rgba(255, 140, 68, 0.35);
+  animation: bonfire-prompt-pulse 1.4s ease-in-out infinite;
+}
+
+#bonfire-prompt.hidden {
+  display: none;
+}
+
+#bonfire-prompt .prompt-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(0, 0, 0, 0.45);
+  color: #f4d486;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  border-radius: 3px;
+  text-shadow: 0 1px 1px #000;
+}
+
+@keyframes bonfire-prompt-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px var(--gold-dark) inset,
+      0 1px 0 rgba(255, 255, 255, 0.4) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.3) inset,
+      0 4px 12px rgba(0, 0, 0, 0.65),
+      0 0 24px rgba(255, 140, 68, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px var(--gold-dark) inset,
+      0 1px 0 rgba(255, 255, 255, 0.4) inset,
+      0 -1px 0 rgba(0, 0, 0, 0.3) inset,
+      0 4px 14px rgba(0, 0, 0, 0.7),
+      0 0 36px rgba(255, 180, 90, 0.55);
+  }
+}
+
 #joystick-base {
   position: absolute;
   inset: 0;
@@ -392,10 +465,581 @@ canvas#game {
 }
 
 /* === 정비 === */
+.maintenance-panel {
+  max-width: 880px;
+}
+
+.maintenance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.maintenance-header h2 {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  flex: 1;
+}
+
+.maintenance-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .maintenance-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+.maintenance-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.maintenance-col h2 {
+  font-size: 14px;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.slot-count {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.maintenance-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid var(--gold-dark);
+  margin-top: 4px;
+}
+
+.maintenance-footer .btn {
+  flex: 1;
+}
+
+.maintenance-item .head .actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-delete {
+  padding: 3px 10px;
+  background: linear-gradient(180deg, #2a1620, #14080e);
+  color: var(--blood-bright);
+  border: 1px solid #000;
+  outline: 1px solid #5a2030;
+  outline-offset: -2px;
+  border-radius: 2px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.btn-delete:active {
+  filter: brightness(0.85);
+  transform: translateY(1px);
+}
+
+.reroll-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.btn-reroll {
+  padding: 5px 12px;
+  background: linear-gradient(180deg, #2a2236, #14101a);
+  color: var(--gold-bright);
+  border: 1px solid #000;
+  outline: 1px solid var(--gold-dark);
+  outline-offset: -2px;
+  border-radius: 2px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.btn-reroll:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-reroll:not(:disabled):active {
+  filter: brightness(0.85);
+  transform: translateY(1px);
+}
+
+.slot-warning {
+  font-size: 11px;
+  color: var(--blood-bright);
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  padding: 6px 8px;
+  border: 1px dashed rgba(230, 51, 78, 0.4);
+  border-radius: 2px;
+  letter-spacing: 0.04em;
+}
+
+.choice[disabled],
+.choice:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .maintenance-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Phase 3/4 — 컬럼 안 섹션 헤더 */
+.maintenance-col h3 {
+  font-size: 12px;
+  margin: 8px 0 4px;
+  color: var(--gold-bright);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--gold-dark);
+  padding-bottom: 4px;
+}
+
+/* === 상점 섹션 (소켓/링크/젬 등 횡단 액션) === */
+.shop-section h3 {
+  font-size: 12px;
+  margin: 0 0 6px;
+  color: var(--gold-bright);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+@media (max-width: 540px) {
+  .shop-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.shop-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 8px 10px;
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.06), transparent 60%),
+    linear-gradient(180deg, #221a2c, #110a18);
+  border: 1px solid #000;
+  outline: 1px solid var(--gold-dark);
+  outline-offset: -2px;
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shop-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.shop-btn:not(:disabled):active {
+  filter: brightness(0.88);
+  transform: translateY(1px);
+}
+
+.shop-btn .shop-label {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--gold-bright);
+}
+
+.shop-btn .shop-cost {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.shop-btn .shop-sub {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* === 소켓 그리드 === */
+.socket-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 8px 4px;
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.04), transparent),
+    linear-gradient(180deg, #110917, #08050d);
+  border: 1px solid #000;
+  outline: 1px solid var(--line);
+  outline-offset: -2px;
+  border-radius: 3px;
+  overflow-x: auto;
+}
+
+.socket-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 38px;
+}
+
+.socket-cell.main .socket-dot {
+  outline-color: var(--gold);
+}
+
+.socket-cell.inactive .socket-dot {
+  opacity: 0.4;
+}
+
+.socket-dot {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid #000;
+  outline: 1px solid var(--gold-dark);
+  outline-offset: -3px;
+  color: #1a0f04;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  font-family: 'Cinzel', 'Times New Roman', serif;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.socket-dot:disabled {
+  cursor: default;
+}
+
+.socket-cell.main .socket-dot {
+  color: #1a0f04;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4);
+}
+
+.socket-label {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+
+.socket-link {
+  width: 22px;
+  height: 4px;
+  margin: 0 -2px;
+  align-self: center;
+  margin-top: -12px;
+}
+
+.socket-link.on {
+  background: linear-gradient(90deg, var(--gold-dark), var(--gold-bright), var(--gold-dark));
+  box-shadow: 0 0 6px rgba(212, 166, 74, 0.5);
+}
+
+.socket-link.off {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--line) 0,
+    var(--line) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+}
+
+/* === 소켓 디테일 (박힌 서포트 옵션) === */
+.socket-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.socket-detail {
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.04), transparent),
+    linear-gradient(180deg, #1c1626, #0e0816);
+  border: 1px solid #000;
+  outline: 1px solid var(--line);
+  outline-offset: -2px;
+  border-radius: 3px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.socket-detail.inactive {
+  opacity: 0.55;
+}
+
+.socket-detail.empty {
+  outline-style: dashed;
+}
+
+.socket-detail .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.socket-detail .head .name {
+  font-weight: 700;
+  color: var(--gold-bright);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.socket-detail .head .actions {
+  display: flex;
+  gap: 4px;
+}
+
+.socket-detail .head .actions .btn-mini {
+  width: auto;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.tag.inactive {
+  background: rgba(120, 30, 30, 0.18);
+  border-color: #5a2030;
+  color: var(--blood-bright);
+}
+
+/* === 인벤토리 (미장착 서포트) === */
+.inv-gem-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+@media (max-width: 540px) {
+  .inv-gem-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inv-gem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background:
+    linear-gradient(180deg, rgba(200, 164, 255, 0.06), transparent),
+    linear-gradient(180deg, #1a1428, #0c0814);
+  border: 1px solid #000;
+  outline: 1px solid var(--line);
+  outline-offset: -2px;
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inv-gem:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inv-gem .name {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--gold-bright);
+}
+
+.inv-gem .desc {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* === 장착/보상 아이템 카드 === */
+.item-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-card {
+  background:
+    linear-gradient(180deg, rgba(212, 166, 74, 0.04), transparent),
+    linear-gradient(180deg, #1c1626, #0e0816);
+  border: 1px solid #000;
+  outline: 1px solid var(--line);
+  outline-offset: -2px;
+  border-radius: 3px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+}
+
+button.item-card {
+  cursor: pointer;
+}
+
+button.item-card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.item-card:not(:disabled):active {
+  filter: brightness(0.88);
+  transform: translateY(1px);
+}
+
+.item-card .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-card .head .name {
+  font-weight: 700;
+  color: var(--gold-bright);
+  letter-spacing: 0.04em;
+  font-size: 13px;
+}
+
+.item-card .head .actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-mods {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.item-mod {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.item-mod .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.item-mod.pre .dot {
+  background: #4fc3f7;
+  box-shadow: 0 0 4px rgba(79, 195, 247, 0.7);
+}
+
+.item-mod.suf .dot {
+  background: #f4d486;
+  box-shadow: 0 0 4px rgba(244, 212, 134, 0.7);
+}
+
+.item-mod .label {
+  flex: 1;
+  color: var(--muted);
+}
+
+.item-mod .value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.item-mod .tier {
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.item-mod .tier.T1 { color: #f4d486; border-color: var(--gold); background: rgba(212, 166, 74, 0.12); }
+.item-mod .tier.T2 { color: #c8a4ff; border-color: #5a4080; background: rgba(200, 164, 255, 0.1); }
+.item-mod .tier.T3 { color: #6cc8ff; border-color: #1f4a82; background: rgba(108, 200, 255, 0.08); }
+.item-mod .tier.T4 { color: #b0b0b8; }
+.item-mod .tier.T5 { color: #707078; }
+
+.item-mod-empty {
+  font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.item-shop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.item-shop .btn-reroll {
+  flex: 1 0 auto;
+}
+
+.choice-card {
+  outline-color: var(--gold-dark);
 }
 
 .maintenance-item {

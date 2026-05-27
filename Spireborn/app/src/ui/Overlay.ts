@@ -1,21 +1,46 @@
-// 모든 오버레이(타이틀, 룰렛, 레벨업, 정비, 게임오버).
+// 모든 오버레이(타이틀, 룰렛, 정비, 게임오버).
 import type {
-  RunState,
-  SupportInstance,
+  ItemInstance,
+  ItemMod,
   MetaState,
+  RunState,
   SkillDef,
 } from '../types';
-import { listSkills } from '../data/skills';
-import { listSupports, getSupport } from '../data/supports';
-import { getItem, listItems } from '../data/items';
+import { listSkills, getSkill } from '../data/skills';
+import { getSupport } from '../data/supports';
+import { SLOT_LABELS } from '../data/items';
+import { getAffix } from '../data/affixes';
+import { decreaseOption, increaseOption } from '../game/build';
 import {
-  decreaseOption,
-  increaseOption,
-  makeSupportInstance,
-} from '../game/build';
+  ENHANCE_COST,
+  MAX_SOCKETS,
+  RerollCounter,
+  attachToFirstEmptySocket,
+  buyRandomGem,
+  detachFromSocket,
+  enhanceItem,
+  expandSocket,
+  rerollPrefixes,
+  rerollSuffixes,
+  rollItemRandomSlot,
+  rollLinks,
+  socketExpandCost,
+  swapSocketedGem,
+} from '../game/shop';
+import { RNG, randomSeed } from '../util/rng';
 
 // 정비에서 옵션 한 점 올릴 때 차감되는 크레딧 비용
 const REFINE_COST_PER_POINT = 5;
+// 리롤 기본 비용
+const REROLL_ITEM_BASE = 8;
+const REROLL_LINKS_BASE = 15;
+const REROLL_AFFIX_BASE = 20;
+const GEM_BUY_BASE = 25;
+const GEM_SWAP_BASE = 10;
+// 장착 아이템 슬롯 정원
+const MAX_EQUIPPED_ITEMS = 4;
+// 미장착 인벤토리 정원
+const MAX_INVENTORY = 8;
 
 export class Overlay {
   private root: HTMLElement;
@@ -37,7 +62,6 @@ export class Overlay {
   }
 
   // === 타이틀 ===
-  // 시작 버튼 한 개. 누르면 룰렛(부모가 onSpinRoulette 콜백으로 위임)
   showTitle(opts: {
     meta: MetaState;
     hasSave: boolean;
@@ -73,19 +97,15 @@ export class Overlay {
   }
 
   // === 룰렛 ===
-  // 무기 후보들이 빠르게 스크롤되다가 ease-out 으로 멈추면서 한 개를 가리킨다.
   runRoulette(onPicked: (skillId: string) => void): void {
     const skills = listSkills();
-    // 충분히 긴 트랙: 셔플된 카탈로그를 여러 번 반복
     const cycles = 10;
     const items: SkillDef[] = [];
     for (let i = 0; i < cycles; i++) {
       const shuf = shuffle(skills.slice());
       items.push(...shuf);
     }
-    // 가장 마지막 사이클에서 균등 추첨
     const finalSkill = skills[Math.floor(Math.random() * skills.length)];
-    // 마지막 사이클 안에서 그 스킬이 처음 나오는 인덱스
     const lastCycleStart = items.length - skills.length;
     let finalIdx = -1;
     for (let i = lastCycleStart; i < items.length; i++) {
@@ -97,7 +117,6 @@ export class Overlay {
     if (finalIdx < 0) finalIdx = items.length - 1;
 
     const cellH = 56;
-    // 중앙 셀이 finalIdx 가 되도록 트랙을 위로 이동
     const endY = -(finalIdx * cellH);
 
     const cellsHtml = items
@@ -142,14 +161,12 @@ export class Overlay {
         const animate = (t: number) => {
           const elapsed = t - startT;
           const u = Math.min(1, elapsed / duration);
-          // easeOutQuint — 시원하게 감속
           const eased = 1 - Math.pow(1 - u, 5);
           const y = endY * eased;
           track.style.transform = `translateY(${y}px)`;
           if (u < 1) {
             raf = requestAnimationFrame(animate);
           } else {
-            // 결과 표시
             resultName.textContent = finalSkill.name;
             resultName.style.color = finalSkill.color;
             resultDesc.textContent = finalSkill.description;
@@ -165,162 +182,314 @@ export class Overlay {
     );
   }
 
-  // === 레벨업 (층 클리어 직후): 서포트 3택 ===
-  showLevelUp(opts: {
-    run: RunState;
-    onPick: (defId: string) => void;
-  }): void {
-    const already = new Set(opts.run.supports.map((s) => s.defId));
-    const pool = listSupports().filter((s) => !already.has(s.id));
-    const choices = pickThree(pool);
-    if (choices.length === 0) {
-      opts.onPick('');
-      return;
-    }
-
-    const cards = choices
-      .map((s) => {
-        const tag = s.kind === 'qualitative' ? '질적' : '양적';
-        const tagClass = s.kind === 'qualitative' ? 'qual' : '';
-        const optTexts = s.options
-          .map((o) => `${o.label} ${o.format(o.initial)}`)
-          .join(' · ');
-        return `
-          <button class="choice" data-pick="${s.id}">
-            <div class="name">${s.name} <span class="tag ${tagClass}">${tag}</span></div>
-            <div class="desc">${s.description}</div>
-            <div class="tag-row"><span class="chip">${optTexts}</span></div>
-          </button>
-        `;
-      })
-      .join('');
-
-    this.show(
-      `
-      <div class="panel">
-        <h2>층 ${opts.run.floor} 클리어 — 서포트 젬 획득</h2>
-        <p class="muted">메인 스킬 [${currentMainSkillName(opts.run)}]에 결합할 서포트를 고르세요.</p>
-        <div class="choice-list">${cards}</div>
-      </div>
-    `,
-      (panel) => {
-        panel.querySelectorAll('[data-pick]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            const id = (btn as HTMLElement).dataset.pick!;
-            opts.onPick(id);
-          });
-        });
-      },
-    );
-  }
-
   // === 정비 ===
   showMaintenance(opts: {
     run: RunState;
-    itemRewardIds: string[];
+    itemRewards: ItemInstance[];
     onChange: () => void;
     onContinue: () => void;
   }): void {
+    // 같은 화톳불 안에서만 누적되는 리롤 카운터.
+    const counter = new RerollCounter();
+    // 같은 화톳불 안에서 액션 RNG (시드는 시간 기반 — 같은 정비 안에서 일관성)
+    const rng = new RNG(randomSeed());
+
     const renderPanel = () => {
-      this.show(this.maintenanceHtml(opts.run, opts.itemRewardIds), (panel) =>
-        this.wireMaintenance(panel, opts.run, opts.itemRewardIds, () => {
-          opts.onChange();
-          renderPanel();
-        }, opts.onContinue),
+      this.show(this.maintenanceHtml(opts.run, opts.itemRewards, counter), (panel) =>
+        this.wireMaintenance(
+          panel,
+          opts.run,
+          opts.itemRewards,
+          counter,
+          rng,
+          () => {
+            opts.onChange();
+            renderPanel();
+          },
+          opts.onContinue,
+        ),
       );
     };
     renderPanel();
   }
 
-  private maintenanceHtml(run: RunState, itemRewardIds: string[]): string {
-    const supportItems = run.supports
-      .map((inst, idx) => this.maintenanceSupportHtml(inst, idx, run.credits))
-      .join('');
-    const equippedItems = run.itemIds
-      .map((id) => {
-        const it = getItem(id);
-        return `
-          <div class="maintenance-item">
-            <div class="head">
-              <div class="name">${it.name}</div>
-              <div class="muted">${it.slot}</div>
-            </div>
-            <div class="muted">${it.description}</div>
-          </div>
-        `;
-      })
-      .join('');
-    const itemChoices = itemRewardIds.length
-      ? `
-        <div class="divider"></div>
-        <h2>아이템 보상</h2>
-        <p class="muted">하나를 선택해 장착. 다음 층 시작 시 적용.</p>
-        <div class="choice-list">
-          ${itemRewardIds
-            .map((id) => {
-              const it = getItem(id);
-              const owned = run.itemIds.includes(id);
-              return `
-                <button class="choice" data-item-pick="${id}" ${owned ? 'disabled' : ''}>
-                  <div class="name">${it.name} ${owned ? '<span class="tag">보유</span>' : ''}</div>
-                  <div class="desc">${it.description}</div>
-                  <div class="tag-row"><span class="chip">${it.slot}</span></div>
-                </button>
-              `;
-            })
-            .join('')}
-          <button class="choice" data-item-skip>건너뛰기</button>
-        </div>
-      `
+  private maintenanceHtml(
+    run: RunState,
+    itemRewards: ItemInstance[],
+    counter: RerollCounter,
+  ): string {
+    const linksCost = counter.cost('links', REROLL_LINKS_BASE);
+    const gemBuyCost = counter.cost('gemBuy', GEM_BUY_BASE);
+    const itemRerollCost = counter.cost('itemReward', REROLL_ITEM_BASE);
+    const socketCost = socketExpandCost(run.mainSkill.sockets);
+
+    const credits = run.credits;
+    const hasRewards = itemRewards.length > 0;
+    const slotsFull = run.items.length >= MAX_EQUIPPED_ITEMS;
+    const inventoryFull = run.supports.length >= MAX_INVENTORY;
+
+    const mainSkillDef = getSkill(run.mainSkill.defId);
+    const socketsHtml = this.socketRowHtml(run);
+    const inventoryHtml = this.supportInventoryHtml(run);
+    const socketDetailsHtml = this.socketDetailsHtml(run);
+    const itemsHtml = this.equippedItemsHtml(run, counter);
+    const rewardsHtml = hasRewards
+      ? this.rewardItemsHtml(itemRewards, slotsFull, itemRerollCost, credits)
       : '';
+
+    const shopGrid = `
+      <div class="shop-grid">
+        <button class="shop-btn" data-shop="socket" ${socketCost === null || credits < socketCost ? 'disabled' : ''}>
+          <span class="shop-label">소켓 확장</span>
+          <span class="shop-cost">${socketCost === null ? '최대' : `${socketCost}c`}</span>
+          <span class="shop-sub">${run.mainSkill.sockets}/${MAX_SOCKETS}</span>
+        </button>
+        <button class="shop-btn" data-shop="links" ${credits < linksCost ? 'disabled' : ''}>
+          <span class="shop-label">링크 리롤</span>
+          <span class="shop-cost">${linksCost}c</span>
+          <span class="shop-sub">인접 60%</span>
+        </button>
+        <button class="shop-btn" data-shop="gem" ${credits < gemBuyCost || inventoryFull ? 'disabled' : ''}>
+          <span class="shop-label">젬 구매</span>
+          <span class="shop-cost">${gemBuyCost}c</span>
+          <span class="shop-sub">${inventoryFull ? '인벤토리 가득' : `인벤토리 ${run.supports.length}/${MAX_INVENTORY}`}</span>
+        </button>
+      </div>
+    `;
+
     return `
-      <div class="panel">
-        <h2>정비 — 층 ${run.floor}</h2>
-        <p class="muted">서포트 옵션은 옵션당 ${REFINE_COST_PER_POINT}c. 내리면 환급.</p>
-        <div class="hud-row">
-          <span class="credit-badge">${run.credits}c</span>
+      <div class="panel maintenance-panel">
+        <div class="maintenance-header">
+          <h2>정비 — 층 ${run.floor}</h2>
+          <span class="credit-badge">${credits}c</span>
         </div>
-        <div class="divider"></div>
-        <h2>서포트 젬</h2>
-        ${
-          supportItems ||
-          '<div class="muted">아직 부착된 서포트가 없습니다.</div>'
-        }
-        ${equippedItems ? `<div class="divider"></div><h2>장착 아이템</h2><div class="maintenance-list">${equippedItems}</div>` : ''}
-        ${itemChoices}
-        <div class="divider"></div>
-        <button class="btn" data-continue>다음 층으로 →</button>
+        <p class="muted">화톳불에서만 빌드 변경 가능. 옵션당 ${REFINE_COST_PER_POINT}c. 화톳불을 떠나면 리롤 비용이 리셋된다.</p>
+        <section class="shop-section">
+          <h3>상점</h3>
+          ${shopGrid}
+        </section>
+        <div class="maintenance-body">
+          <section class="maintenance-col">
+            <h3>메인 스킬 — ${mainSkillDef.name}</h3>
+            ${socketsHtml}
+            ${socketDetailsHtml}
+            <h3>인벤토리 <span class="slot-count">${run.supports.length}/${MAX_INVENTORY}</span></h3>
+            ${inventoryHtml}
+          </section>
+          <section class="maintenance-col">
+            <h3>장착 아이템 <span class="slot-count">${run.items.length}/${MAX_EQUIPPED_ITEMS}</span></h3>
+            ${itemsHtml}
+            ${rewardsHtml}
+          </section>
+        </div>
+        <div class="maintenance-footer">
+          <button class="btn" data-continue>다음 층으로 →</button>
+        </div>
       </div>
     `;
   }
 
-  private maintenanceSupportHtml(
-    inst: SupportInstance,
-    idx: number,
-    credits: number,
-  ): string {
-    const def = getSupport(inst.defId);
-    const optionsHtml = def.options
-      .map((opt) => {
-        const cur = inst.values[opt.key] ?? opt.initial;
-        const cantBuy = credits < REFINE_COST_PER_POINT || cur >= opt.max;
+  private socketRowHtml(run: RunState): string {
+    const skill = run.mainSkill;
+    const reached = computeReached(skill);
+    const cells: string[] = [];
+    const mainSkillDef = getSkill(skill.defId);
+    for (let i = 0; i < skill.sockets; i++) {
+      const isMain = i === 0;
+      const inst = skill.socketed[i];
+      const active = reached[i];
+      const supportDef = inst ? getSupport(inst.defId) : null;
+      const dotStyle = isMain
+        ? `background:${mainSkillDef.color}`
+        : inst
+          ? `background:${active ? 'var(--rune)' : '#3a2e44'}`
+          : `background:transparent;border-style:dashed`;
+      const label = isMain ? mainSkillDef.name : supportDef?.name ?? '빈 슬롯';
+      cells.push(`
+        <div class="socket-cell${active ? ' active' : ''}${isMain ? ' main' : ''}">
+          <button class="socket-dot"
+                  style="${dotStyle}"
+                  data-socket="${i}"
+                  ${isMain ? 'disabled' : ''}
+                  title="${escapeAttr(label)}">
+            ${isMain ? '★' : inst ? '◆' : '○'}
+          </button>
+          <div class="socket-label">${escapeHtml(isMain ? '주' : `${i}`)}</div>
+        </div>
+      `);
+      if (i < skill.sockets - 1) {
+        const linked = skill.links[i];
+        cells.push(`<div class="socket-link ${linked ? 'on' : 'off'}"></div>`);
+      }
+    }
+    return `<div class="socket-row">${cells.join('')}</div>`;
+  }
+
+  private socketDetailsHtml(run: RunState): string {
+    const skill = run.mainSkill;
+    const reached = computeReached(skill);
+    const items: string[] = [];
+    for (let i = 1; i < skill.sockets; i++) {
+      const inst = skill.socketed[i];
+      const active = reached[i];
+      if (!inst) {
+        items.push(`
+          <div class="socket-detail empty${active ? '' : ' inactive'}">
+            <div class="head">
+              <span class="name">소켓 ${i} ${active ? '' : '<span class="tag inactive">비활성</span>'}</span>
+            </div>
+            <div class="muted">빈 슬롯 — 인벤토리에서 서포트를 클릭해 자동 부착.</div>
+          </div>
+        `);
+        continue;
+      }
+      const def = getSupport(inst.defId);
+      const optionsHtml = def.options
+        .map((opt) => {
+          const cur = inst.values[opt.key] ?? opt.initial;
+          const cantBuy = run.credits < REFINE_COST_PER_POINT || cur >= opt.max;
+          return `
+            <div class="stat-row">
+              <span class="label">${opt.label}</span>
+              <span class="value">${opt.format(cur)}</span>
+              <button class="btn-mini" data-sup-socket="${i}" data-key="${opt.key}" data-dir="-" ${cur <= opt.min ? 'disabled' : ''}>−</button>
+              <button class="btn-mini" data-sup-socket="${i}" data-key="${opt.key}" data-dir="+" ${cantBuy ? 'disabled' : ''}>+</button>
+            </div>
+          `;
+        })
+        .join('');
+      items.push(`
+        <div class="socket-detail${active ? '' : ' inactive'}">
+          <div class="head">
+            <span class="name">소켓 ${i} · ${def.name} ${active ? '' : '<span class="tag inactive">비활성</span>'}</span>
+            <span class="actions">
+              <button class="btn-mini detach" data-socket-detach="${i}">분리</button>
+              <button class="btn-mini swap" data-socket-swap="${i}">교체</button>
+            </span>
+          </div>
+          <div class="stats">${optionsHtml}</div>
+        </div>
+      `);
+    }
+    if (items.length === 0) {
+      return '<div class="muted">소켓이 없습니다. 상점에서 확장하세요.</div>';
+    }
+    return `<div class="socket-detail-list">${items.join('')}</div>`;
+  }
+
+  private supportInventoryHtml(run: RunState): string {
+    const skill = run.mainSkill;
+    const anyEmpty = skill.socketed.some((s, i) => i > 0 && s === null);
+    if (run.supports.length === 0) {
+      return '<div class="muted">미장착 서포트가 없습니다.</div>';
+    }
+    const cards = run.supports
+      .map((inst, idx) => {
+        const def = getSupport(inst.defId);
+        const tag = def.kind === 'qualitative' ? '질적' : '양적';
+        const tagClass = def.kind === 'qualitative' ? 'qual' : '';
         return `
-          <div class="stat-row">
-            <span class="label">${opt.label}</span>
-            <span class="value">${opt.format(cur)}</span>
-            <button class="btn-mini" data-sup="${idx}" data-key="${opt.key}" data-dir="-" ${cur <= opt.min ? 'disabled' : ''}>−</button>
-            <button class="btn-mini" data-sup="${idx}" data-key="${opt.key}" data-dir="+" ${cantBuy ? 'disabled' : ''}>+</button>
+          <button class="inv-gem" data-attach-inv="${idx}" ${anyEmpty ? '' : 'disabled'}>
+            <span class="name">${def.name} <span class="tag ${tagClass}">${tag}</span></span>
+            <span class="desc">${def.description}</span>
+          </button>
+        `;
+      })
+      .join('');
+    return `<div class="inv-gem-list">${cards}</div>`;
+  }
+
+  private equippedItemsHtml(run: RunState, counter: RerollCounter): string {
+    if (run.items.length === 0) {
+      return '<div class="muted">장착된 아이템이 없습니다.</div>';
+    }
+    const prefixCost = counter.cost('prefix', REROLL_AFFIX_BASE);
+    const suffixCost = counter.cost('suffix', REROLL_AFFIX_BASE);
+    const credits = run.credits;
+    const cards = run.items
+      .map((item, idx) => {
+        const slotLabel = SLOT_LABELS[item.slot];
+        const modsHtml = this.itemModsHtml(item);
+        const enhanceDisabled = item.enhanced || credits < ENHANCE_COST;
+        return `
+          <div class="item-card">
+            <div class="head">
+              <div class="name">${escapeHtml(item.name)}</div>
+              <div class="actions">
+                <span class="muted">${slotLabel}</span>
+                <button class="btn-delete" data-item-delete="${idx}">삭제</button>
+              </div>
+            </div>
+            ${modsHtml}
+            <div class="item-shop">
+              <button class="btn-reroll" data-item-prefix="${idx}" ${credits < prefixCost ? 'disabled' : ''}>접두 변경 ${prefixCost}c</button>
+              <button class="btn-reroll" data-item-suffix="${idx}" ${credits < suffixCost ? 'disabled' : ''}>접미 변경 ${suffixCost}c</button>
+              <button class="btn-reroll" data-item-enhance="${idx}" ${enhanceDisabled ? 'disabled' : ''}>강화 ${ENHANCE_COST}c${item.enhanced ? ' · 사용' : ''}</button>
+            </div>
           </div>
         `;
       })
       .join('');
-    return `
-      <div class="maintenance-item">
-        <div class="head">
-          <div class="name">${def.name}</div>
-          <div class="muted">${def.kind === 'qualitative' ? '질적' : '양적'}</div>
+    return `<div class="item-card-list">${cards}</div>`;
+  }
+
+  private itemModsHtml(item: ItemInstance): string {
+    const renderMod = (mod: ItemMod, kind: 'prefix' | 'suffix') => {
+      const def = getAffix(mod.affixId);
+      if (!def) return '';
+      const dot = kind === 'prefix' ? 'pre' : 'suf';
+      return `
+        <div class="item-mod ${dot}">
+          <span class="dot"></span>
+          <span class="label">${def.label}</span>
+          <span class="value">${def.format(mod.roll)}</span>
+          <span class="tier T${mod.tier}">T${mod.tier}</span>
         </div>
-        <div class="stats">${optionsHtml}</div>
+      `;
+    };
+    const empty = item.prefixes.length === 0 && item.suffixes.length === 0;
+    if (empty) {
+      return '<div class="muted item-mod-empty">모드 없음</div>';
+    }
+    const pre = item.prefixes.map((m) => renderMod(m, 'prefix')).join('');
+    const suf = item.suffixes.map((m) => renderMod(m, 'suffix')).join('');
+    return `<div class="item-mods">${pre}${suf}</div>`;
+  }
+
+  private rewardItemsHtml(
+    rewards: ItemInstance[],
+    slotsFull: boolean,
+    rerollCost: number,
+    credits: number,
+  ): string {
+    const canReroll = rewards.length > 0 && credits >= rerollCost;
+    const cards = rewards
+      .map((item, idx) => {
+        const slotLabel = SLOT_LABELS[item.slot];
+        const modsHtml = this.itemModsHtml(item);
+        return `
+          <button class="item-card choice-card" data-item-pick="${idx}" ${slotsFull ? 'disabled' : ''}>
+            <div class="head">
+              <div class="name">${escapeHtml(item.name)}</div>
+              <div class="actions"><span class="muted">${slotLabel}</span></div>
+            </div>
+            ${modsHtml}
+          </button>
+        `;
+      })
+      .join('');
+    return `
+      <div class="divider"></div>
+      <h3>보상 아이템</h3>
+      ${slotsFull ? '<div class="slot-warning">장착 슬롯 가득. 삭제 후 재시도.</div>' : ''}
+      <div class="item-card-list">
+        ${cards}
+        <button class="choice" data-item-skip>건너뛰기</button>
+      </div>
+      <div class="reroll-row">
+        <button class="btn-reroll" data-item-reward-reroll ${canReroll ? '' : 'disabled'}>
+          보상 리롤 ${rerollCost}c
+        </button>
       </div>
     `;
   }
@@ -328,16 +497,19 @@ export class Overlay {
   private wireMaintenance(
     panel: HTMLElement,
     run: RunState,
-    itemRewardIds: string[],
+    itemRewards: ItemInstance[],
+    counter: RerollCounter,
+    rng: RNG,
     onChange: () => void,
     onContinue: () => void,
   ): void {
-    panel.querySelectorAll('button[data-sup]').forEach((btn) => {
+    // 소켓 박힌 서포트 옵션 ±
+    panel.querySelectorAll('button[data-sup-socket]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const idx = parseInt((btn as HTMLElement).dataset.sup!, 10);
+        const i = parseInt((btn as HTMLElement).dataset.supSocket!, 10);
         const key = (btn as HTMLElement).dataset.key!;
         const dir = (btn as HTMLElement).dataset.dir!;
-        const inst = run.supports[idx];
+        const inst = run.mainSkill.socketed[i];
         if (!inst) return;
         if (dir === '+') {
           if (run.credits < REFINE_COST_PER_POINT) return;
@@ -345,30 +517,169 @@ export class Overlay {
             run.credits -= REFINE_COST_PER_POINT;
             onChange();
           }
-        } else {
-          if (decreaseOption(inst, key)) {
-            run.credits += REFINE_COST_PER_POINT;
-            onChange();
-          }
+        } else if (decreaseOption(inst, key)) {
+          run.credits += REFINE_COST_PER_POINT;
+          onChange();
         }
       });
     });
-    panel.querySelectorAll('[data-item-pick]').forEach((btn) => {
+
+    // 소켓 분리
+    panel.querySelectorAll('[data-socket-detach]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const id = (btn as HTMLElement).dataset.itemPick!;
-        if (!run.itemIds.includes(id)) {
-          run.itemIds.push(id);
-          if (run.itemIds.length > 4) run.itemIds.shift();
-        }
-        const i = itemRewardIds.indexOf(id);
-        if (i >= 0) itemRewardIds.splice(i, 1);
+        const i = parseInt((btn as HTMLElement).dataset.socketDetach!, 10);
+        if (run.supports.length >= MAX_INVENTORY) return;
+        detachFromSocket(run, i);
         onChange();
       });
     });
-    panel.querySelector('[data-item-skip]')?.addEventListener('click', () => {
-      itemRewardIds.length = 0;
+
+    // 소켓 교체 (랜덤 다른 종으로)
+    panel.querySelectorAll('[data-socket-swap]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = parseInt((btn as HTMLElement).dataset.socketSwap!, 10);
+        const cost = counter.cost('gemSwap', GEM_SWAP_BASE);
+        if (run.credits < cost) return;
+        const result = swapSocketedGem(run.mainSkill, i, rng);
+        if (!result) return;
+        run.credits -= cost;
+        counter.bump('gemSwap');
+        onChange();
+      });
+    });
+
+    // 인벤토리 → 가장 가까운 빈 소켓에 자동 부착
+    panel.querySelectorAll('[data-attach-inv]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).dataset.attachInv!, 10);
+        if (attachToFirstEmptySocket(run, idx)) {
+          onChange();
+        }
+      });
+    });
+
+    // 상점 — 소켓 확장
+    panel.querySelector('[data-shop="socket"]')?.addEventListener('click', () => {
+      const cost = socketExpandCost(run.mainSkill.sockets);
+      if (cost === null) return;
+      if (run.credits < cost) return;
+      if (!expandSocket(run.mainSkill)) return;
+      run.credits -= cost;
       onChange();
     });
+
+    // 상점 — 링크 리롤
+    panel.querySelector('[data-shop="links"]')?.addEventListener('click', () => {
+      const cost = counter.cost('links', REROLL_LINKS_BASE);
+      if (run.credits < cost) return;
+      run.mainSkill.links = rollLinks(run.mainSkill.sockets, rng);
+      run.credits -= cost;
+      counter.bump('links');
+      onChange();
+    });
+
+    // 상점 — 젬 구매
+    panel.querySelector('[data-shop="gem"]')?.addEventListener('click', () => {
+      if (run.supports.length >= MAX_INVENTORY) return;
+      const cost = counter.cost('gemBuy', GEM_BUY_BASE);
+      if (run.credits < cost) return;
+      run.supports.push(buyRandomGem(rng));
+      run.credits -= cost;
+      counter.bump('gemBuy');
+      onChange();
+    });
+
+    // 장착 아이템 — 접두 변경
+    panel.querySelectorAll('[data-item-prefix]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).dataset.itemPrefix!, 10);
+        const item = run.items[idx];
+        if (!item) return;
+        const cost = counter.cost('prefix', REROLL_AFFIX_BASE);
+        if (run.credits < cost) return;
+        rerollPrefixes(item, run.floor, rng);
+        run.credits -= cost;
+        counter.bump('prefix');
+        onChange();
+      });
+    });
+
+    // 장착 아이템 — 접미 변경
+    panel.querySelectorAll('[data-item-suffix]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).dataset.itemSuffix!, 10);
+        const item = run.items[idx];
+        if (!item) return;
+        const cost = counter.cost('suffix', REROLL_AFFIX_BASE);
+        if (run.credits < cost) return;
+        rerollSuffixes(item, run.floor, rng);
+        run.credits -= cost;
+        counter.bump('suffix');
+        onChange();
+      });
+    });
+
+    // 장착 아이템 — 강화 (한 아이템당 1회)
+    panel.querySelectorAll('[data-item-enhance]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).dataset.itemEnhance!, 10);
+        const item = run.items[idx];
+        if (!item) return;
+        if (item.enhanced) return;
+        if (run.credits < ENHANCE_COST) return;
+        if (enhanceItem(item)) {
+          run.credits -= ENHANCE_COST;
+          onChange();
+        }
+      });
+    });
+
+    // 장착 아이템 — 삭제
+    panel.querySelectorAll('[data-item-delete]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt((btn as HTMLElement).dataset.itemDelete!, 10);
+        if (idx >= 0 && idx < run.items.length) {
+          run.items.splice(idx, 1);
+          onChange();
+        }
+      });
+    });
+
+    // 보상 아이템 — 픽
+    panel.querySelectorAll('[data-item-pick]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (run.items.length >= MAX_EQUIPPED_ITEMS) return;
+        const idx = parseInt((btn as HTMLElement).dataset.itemPick!, 10);
+        const item = itemRewards[idx];
+        if (!item) return;
+        run.items.push(item);
+        itemRewards.splice(idx, 1);
+        onChange();
+      });
+    });
+
+    // 보상 아이템 — 건너뛰기
+    panel.querySelector('[data-item-skip]')?.addEventListener('click', () => {
+      itemRewards.length = 0;
+      onChange();
+    });
+
+    // 보상 아이템 — 리롤
+    panel
+      .querySelector('[data-item-reward-reroll]')
+      ?.addEventListener('click', () => {
+        if (itemRewards.length === 0) return;
+        const cost = counter.cost('itemReward', REROLL_ITEM_BASE);
+        if (run.credits < cost) return;
+        run.credits -= cost;
+        const floor = run.floor;
+        itemRewards.length = 0;
+        itemRewards.push(rollItemRandomSlot(floor, rng), rollItemRandomSlot(floor, rng));
+        counter.bump('itemReward');
+        onChange();
+      });
+
+    // 다음 층
     panel.querySelector('[data-continue]')?.addEventListener('click', () => {
       onContinue();
     });
@@ -404,18 +715,24 @@ export class Overlay {
   }
 }
 
-function currentMainSkillName(run: RunState): string {
-  return listSkills().find((s) => s.id === run.mainSkillId)?.name ?? '?';
-}
-
-function pickThree<T>(arr: T[]): T[] {
-  if (arr.length <= 3) return [...arr];
-  const copy = arr.slice();
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
+// === 헬퍼 ===
+function computeReached(skill: RunState['mainSkill']): boolean[] {
+  const n = skill.sockets;
+  const reached = new Array<boolean>(n).fill(false);
+  reached[0] = true;
+  const queue: number[] = [0];
+  while (queue.length > 0) {
+    const i = queue.shift()!;
+    if (i > 0 && skill.links[i - 1] && !reached[i - 1]) {
+      reached[i - 1] = true;
+      queue.push(i - 1);
+    }
+    if (i < n - 1 && skill.links[i] && !reached[i + 1]) {
+      reached[i + 1] = true;
+      queue.push(i + 1);
+    }
   }
-  return copy.slice(0, 3);
+  return reached;
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -433,15 +750,20 @@ function formatTime(sec: number): string {
   return `${m}:${r}`;
 }
 
-export function pickItemRewards(): string[] {
-  const all = listItems().map((i) => i.id);
-  for (let i = all.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [all[i], all[j]] = [all[j], all[i]];
-  }
-  return all.slice(0, 2);
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      case "'": return '&#39;';
+      default: return c;
+    }
+  });
 }
 
-export function newSupportInstance(defId: string): SupportInstance {
-  return makeSupportInstance(defId);
+function escapeAttr(s: string): string {
+  return escapeHtml(s);
 }
+

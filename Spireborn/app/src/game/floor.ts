@@ -10,7 +10,6 @@ export interface FloorSpec {
   bossHpMul: number;
   // 층 클리어 시 보너스 크레딧
   creditClearBonus: number;
-  itemRewardChance: number; // 아이템 드랍 확률 (0..1)
 }
 
 export function specForFloor(floor: number): FloorSpec {
@@ -26,7 +25,6 @@ export function specForFloor(floor: number): FloorSpec {
     enemySpeedMul: 1 + (f - 1) * 0.045,
     bossHpMul: 1 + (f - 1) * 0.45,
     creditClearBonus: 15 + f * 5,
-    itemRewardChance: f >= 2 ? 0.5 : 0,
   };
 }
 
