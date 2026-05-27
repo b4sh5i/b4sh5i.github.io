@@ -520,24 +520,156 @@ export class Renderer {
     ctx.arc(ex - lx * 2.2, ey - ly * 2.2, 1.4, 0, Math.PI * 2);
     ctx.fill();
 
-    // 무기 — 정면쪽 빛나는 검신
-    const wx = bx + fx * 14;
-    const wy = by + fy * 14;
-    this.drawGlow(wx, wy, 10, '#ffb84a', 0.7);
-    ctx.strokeStyle = '#e8d49a';
-    ctx.lineWidth = 2.2;
+    // 무기 — 십자가드가 달린 한손검. attackPhase 에 따라 휘두름/찌르기 모션.
+    this.drawSword(p, bx, by, fx, fy, lx, ly, bob);
+  }
+
+  // 검 — local +X 가 칼끝 방향. 손잡이 피벗을 플레이어 손 위치로 옮긴 뒤 회전.
+  private drawSword(
+    p: { facing: number; attackPhase: number; attackDuration: number; attackKind: 'idle' | 'slash' | 'thrust'; attackDir: 1 | -1 },
+    bx: number,
+    by: number,
+    fx: number,
+    fy: number,
+    lx: number,
+    ly: number,
+    bob: number,
+  ): void {
+    const ctx = this.ctx;
+
+    // 모션 — 0 = 휘두름 시작, 1 = 끝
+    const t =
+      p.attackPhase > 0
+        ? Math.min(1, 1 - p.attackPhase / Math.max(0.001, p.attackDuration))
+        : 1;
+    let swingAngle = -0.32; // 휴식 자세: 살짝 정면 위로 비스듬히
+    let thrustOffset = 0;
+
+    if (p.attackPhase > 0 && p.attackKind === 'slash') {
+      // 좌→우로 휙 스윙. easeInOutCubic 으로 가속 후 감속.
+      const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const startA = -1.6; // 시작각 (라디안)
+      const endA = 1.6;
+      swingAngle = (startA + (endA - startA) * e) * p.attackDir;
+    } else if (p.attackPhase > 0 && p.attackKind === 'thrust') {
+      // 앞으로 살짝 찌르고 되돌아옴.
+      thrustOffset = Math.sin(t * Math.PI) * 8;
+      swingAngle = -0.12;
+    }
+
+    // 손 위치 (오른손) — 몸 앞쪽 + 우측 약간.
+    const handFwd = 5 + thrustOffset;
+    const handSide = 4;
+    const handX = bx + fx * handFwd + lx * handSide;
+    const handY = by + fy * handFwd + ly * handSide + bob * 0.3;
+    const angle = p.facing + swingAngle;
+
+    ctx.save();
+    ctx.translate(handX, handY);
+    ctx.rotate(angle);
+
+    // 1) 폼멜 — 손잡이 끝의 황금 구슬
+    ctx.fillStyle = '#d4a64a';
     ctx.beginPath();
-    ctx.moveTo(bx + fx * 8 + lx * 1.5, by + fy * 8 + ly * 1.5);
-    ctx.lineTo(bx + fx * 22, by + fy * 22);
-    ctx.stroke();
-    ctx.strokeStyle = '#fff7d8';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    // 칼끝 코어
-    ctx.fillStyle = '#fff8d2';
-    ctx.beginPath();
-    ctx.arc(bx + fx * 22, by + fy * 22, 1.6, 0, Math.PI * 2);
+    ctx.arc(-7, 0, 2, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#5a3e10';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // 2) 그립 — 가죽 감긴 손잡이
+    ctx.fillStyle = '#2a1810';
+    ctx.fillRect(-6, -1.4, 6, 2.8);
+    ctx.strokeStyle = '#0a0604';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(-6, -1.4, 6, 2.8);
+    // 감김 라인
+    ctx.strokeStyle = 'rgba(180,140,80,0.55)';
+    ctx.lineWidth = 0.5;
+    for (let i = -5; i <= 0; i += 1.4) {
+      ctx.beginPath();
+      ctx.moveTo(i, -1.4);
+      ctx.lineTo(i + 0.7, 1.4);
+      ctx.stroke();
+    }
+
+    // 3) 십자 가드 — 황금
+    ctx.fillStyle = '#d4a64a';
+    ctx.beginPath();
+    ctx.moveTo(-0.6, -5.4);
+    ctx.lineTo(1.8, -4.6);
+    ctx.lineTo(1.8, 4.6);
+    ctx.lineTo(-0.6, 5.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#4a3010';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+    // 중앙 보석
+    ctx.fillStyle = '#ff6478';
+    ctx.beginPath();
+    ctx.arc(0.6, 0, 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4) 검신 — 길게 가늘어지는 형태 + 중앙 홈(fuller)
+    const bladeLen = 22;
+    const bladeW = 3.2;
+    ctx.fillStyle = '#dde2ea';
+    ctx.strokeStyle = '#1b1f28';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(1.8, -bladeW);
+    ctx.lineTo(1.8 + bladeLen * 0.82, -bladeW * 0.55);
+    ctx.lineTo(1.8 + bladeLen, 0);
+    ctx.lineTo(1.8 + bladeLen * 0.82, bladeW * 0.55);
+    ctx.lineTo(1.8, bladeW);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // fuller — 중앙 얕은 홈
+    ctx.strokeStyle = 'rgba(60,70,90,0.55)';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(3, 0);
+    ctx.lineTo(1.8 + bladeLen * 0.78, 0);
+    ctx.stroke();
+    // 칼날 하이라이트 — 윗면 빛
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(2.4, -bladeW * 0.72);
+    ctx.lineTo(1.8 + bladeLen * 0.82, -bladeW * 0.35);
+    ctx.stroke();
+
+    ctx.restore();
+
+    // 5) 휘두르는 중 — 칼끝 글로우 & 잔상
+    if (p.attackPhase > 0) {
+      const tipLocalX = 1.8 + 22;
+      const tipX = handX + Math.cos(angle) * tipLocalX;
+      const tipY = handY + Math.sin(angle) * tipLocalX;
+      const intensity = Math.sin(t * Math.PI); // 가운데서 가장 강함
+      this.drawGlow(tipX, tipY, 9, '#ffd07a', 0.55 * intensity);
+      if (p.attackKind === 'slash') {
+        // 잔상 — 0.06s 전 위치를 흐리게
+        const past = Math.max(0, t - 0.18);
+        const ep =
+          past < 0.5 ? 4 * past * past * past : 1 - Math.pow(-2 * past + 2, 3) / 2;
+        const pastAng = p.facing + (-1.6 + (1.6 - -1.6) * ep) * p.attackDir;
+        ctx.save();
+        ctx.globalAlpha = 0.35 * intensity;
+        ctx.translate(handX, handY);
+        ctx.rotate(pastAng);
+        ctx.strokeStyle = 'rgba(255,240,200,0.85)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(2, 0);
+        ctx.lineTo(2 + 22, 0);
+        ctx.stroke();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+    }
   }
 
   private buildPlayerShadow(): HTMLCanvasElement {

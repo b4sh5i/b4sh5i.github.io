@@ -57,6 +57,12 @@ export class World {
     facing: 0,
     // 걸음 진행 (애니메이션용)
     stepPhase: 0,
+    // 무기 휘두름 애니메이션 — attackPhase 가 양수일 때 진행 중.
+    attackPhase: 0,
+    attackDuration: 0.22,
+    attackKind: 'idle' as 'idle' | 'slash' | 'thrust',
+    // 슬래시 방향 — 매 타격마다 좌우 교대로 휘둘러 자연스럽게 보이게.
+    attackDir: 1 as 1 | -1,
   };
 
   // 다음 자동 발동 타이밍
@@ -238,6 +244,7 @@ export class World {
     this.player.y += this.inputY * ps.moveSpeed * dt;
     if (this.player.invuln > 0) this.player.invuln -= dt;
     if (this.player.flash > 0) this.player.flash -= dt;
+    if (this.player.attackPhase > 0) this.player.attackPhase -= dt;
 
     // 바라보는 방향 — 이동 중이면 진행 방향, 정지하면 가장 가까운 적쪽
     if (moveMag > 0.05) {
@@ -431,6 +438,7 @@ export class World {
         const target = this.findNearestEnemy(def.baseRange);
         if (target) {
           this.fireProjectiles(def.color, def.baseDamage, def.baseProjectileSpeed, s, target);
+          this.triggerAttackAnim('thrust');
           this.nextCast = def.baseCooldown * s.cooldownMul;
         } else {
           // 적 없으면 살짝 기다림
@@ -443,6 +451,7 @@ export class World {
       while (this.auraTick >= interval) {
         this.auraTick -= interval;
         this.auraPulse(def.baseDamage, def.baseArea * s.areaMul, def.color, s);
+        this.triggerAttackAnim('thrust');
       }
     } else if (def.cast.kind === 'orbit') {
       // 회전은 updateOrbits에서 다룸 — 여기선 칼날 회전만 진행
@@ -455,12 +464,26 @@ export class World {
         const target = this.findNearestEnemy(def.cast.reach + 40);
         if (target) {
           this.slashStrike(def.baseDamage, def.cast.arcDeg, def.cast.reach, def.color, s, target);
+          this.triggerAttackAnim('slash');
           this.nextCast = def.baseCooldown * s.cooldownMul;
         } else {
           this.nextCast = 0.15;
         }
       }
     }
+  }
+
+  // 무기 휘두름 애니메이션 트리거 — Renderer 가 player.attackPhase 를 읽어 모션을 그린다.
+  private triggerAttackAnim(kind: 'slash' | 'thrust'): void {
+    const p = this.player;
+    if (kind === 'slash') {
+      p.attackDuration = 0.22;
+      p.attackDir = p.attackDir === 1 ? -1 : 1;
+    } else {
+      p.attackDuration = 0.16;
+    }
+    p.attackKind = kind;
+    p.attackPhase = p.attackDuration;
   }
 
   private fireProjectiles(
