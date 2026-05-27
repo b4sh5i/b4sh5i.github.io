@@ -630,6 +630,68 @@ canvas#game {
   padding-bottom: 4px;
 }
 
+/* === 자동 줍기 (스테이지 종료 시 남은 오브 일괄 회수) === */
+.autopickup-section {
+  margin: 4px 0 8px;
+}
+
+.autopickup-btn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 216, 107, 0.1), transparent 70%),
+    linear-gradient(180deg, #2a2238, #14101e);
+  border: 1px solid #000;
+  outline: 1px solid var(--gold-dark);
+  outline-offset: -2px;
+  border-radius: 3px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.autopickup-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.autopickup-btn:not(:disabled):active {
+  filter: brightness(0.88);
+  transform: translateY(1px);
+}
+
+.autopickup-btn .autopickup-label {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--gold-bright);
+  text-transform: uppercase;
+}
+
+.autopickup-btn .autopickup-cost {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffd86b;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+  justify-self: end;
+}
+
+.autopickup-btn .autopickup-sub {
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  grid-column: 1 / span 2;
+}
+
 /* === 상점 섹션 (소켓/링크/젬 등 횡단 액션) === */
 .shop-section h3 {
   font-size: 12px;

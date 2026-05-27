@@ -201,6 +201,8 @@ export interface RunState {
   timeAliveSec: number;
   // 현재 층에서 경과한 시간
   floorElapsedSec: number;
+  // 현재 층에서 누적된 크레딧 획득량 — 자동 줍기 비용(5%) 계산용
+  floorCreditsEarned: number;
 }
 
 // === 영구 보관 (최고 기록) ===

@@ -5,8 +5,8 @@ import { defaultMetaState } from '../types';
 
 const RUN_KEY = 'spireborn:run';
 const META_KEY = 'spireborn:meta';
-// 4 = Phase 3/4 마이그레이션 (mainSkill: SkillInstance, items: ItemInstance[], supports = 미장착 인벤토리). 기존 세이브는 무효 처리.
-const RUN_VERSION = 4;
+// 5 = floorCreditsEarned 추가 (자동 줍기 비용 계산용). 기존 세이브는 무효 처리.
+const RUN_VERSION = 5;
 
 export function saveRun(run: RunState): void {
   try {

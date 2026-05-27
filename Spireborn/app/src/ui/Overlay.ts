@@ -43,6 +43,19 @@ const MAIN_SKILL_REROLL_BASE = 50;
 const MAX_EQUIPPED_ITEMS = 4;
 // 미장착 인벤토리 정원
 const MAX_INVENTORY = 8;
+// 자동 줍기 — 이 층에서 누적된 크레딧의 비율을 비용으로 지불
+const AUTO_PICKUP_COST_RATIO = 0.05;
+
+export interface AutoPickupHandle {
+  // 남은 오브 가치/개수 — 미리보기용
+  getInfo: () => { remainingValue: number; remainingCount: number };
+  // 실제 회수 (비용 차감은 호출 전에 마쳐야 함). 회수된 크레딧 반환.
+  collect: () => number;
+}
+
+function autoPickupCost(run: RunState): number {
+  return Math.max(0, Math.floor(run.floorCreditsEarned * AUTO_PICKUP_COST_RATIO));
+}
 
 export class Overlay {
   private root: HTMLElement;
@@ -193,6 +206,7 @@ export class Overlay {
   showMaintenance(opts: {
     run: RunState;
     itemRewards: ItemInstance[];
+    autoPickup: AutoPickupHandle;
     onChange: () => void;
     onContinue: () => void;
   }): void {
@@ -202,19 +216,22 @@ export class Overlay {
     const rng = new RNG(randomSeed());
 
     const renderPanel = () => {
-      this.show(this.maintenanceHtml(opts.run, opts.itemRewards, counter), (panel) =>
-        this.wireMaintenance(
-          panel,
-          opts.run,
-          opts.itemRewards,
-          counter,
-          rng,
-          () => {
-            opts.onChange();
-            renderPanel();
-          },
-          opts.onContinue,
-        ),
+      this.show(
+        this.maintenanceHtml(opts.run, opts.itemRewards, counter, opts.autoPickup),
+        (panel) =>
+          this.wireMaintenance(
+            panel,
+            opts.run,
+            opts.itemRewards,
+            counter,
+            rng,
+            opts.autoPickup,
+            () => {
+              opts.onChange();
+              renderPanel();
+            },
+            opts.onContinue,
+          ),
       );
     };
     renderPanel();
@@ -224,6 +241,7 @@ export class Overlay {
     run: RunState,
     itemRewards: ItemInstance[],
     counter: RerollCounter,
+    autoPickup: AutoPickupHandle,
   ): string {
     const linksCost = counter.cost('links', REROLL_LINKS_BASE);
     const gemBuyCost = counter.cost('gemBuy', GEM_BUY_BASE);
@@ -273,6 +291,24 @@ export class Overlay {
       </div>
     `;
 
+    const cost = autoPickupCost(run);
+    const orbInfo = autoPickup.getInfo();
+    const canAutoPickup =
+      orbInfo.remainingCount > 0 && credits >= cost;
+    const autoPickupSub =
+      orbInfo.remainingCount > 0
+        ? `남은 오브 ${orbInfo.remainingCount}개 · 회수 +${orbInfo.remainingValue}c`
+        : '회수할 오브 없음';
+    const autoPickupHtml = `
+      <section class="autopickup-section">
+        <button class="autopickup-btn" data-autopickup ${canAutoPickup ? '' : 'disabled'}>
+          <span class="autopickup-label">자동 줍기</span>
+          <span class="autopickup-cost">${cost}c 지불</span>
+          <span class="autopickup-sub">${autoPickupSub}</span>
+        </button>
+      </section>
+    `;
+
     return `
       <div class="panel maintenance-panel">
         <div class="maintenance-header">
@@ -280,6 +316,7 @@ export class Overlay {
           <span class="credit-badge">${credits}c</span>
         </div>
         <p class="muted">화톳불에서만 빌드 변경 가능. 옵션당 ${REFINE_COST_PER_POINT}c. 화톳불을 떠나면 리롤 비용이 리셋된다.</p>
+        ${autoPickupHtml}
         <section class="shop-section">
           <h3>상점</h3>
           ${shopGrid}
@@ -516,9 +553,20 @@ export class Overlay {
     itemRewards: ItemInstance[],
     counter: RerollCounter,
     rng: RNG,
+    autoPickup: AutoPickupHandle,
     onChange: () => void,
     onContinue: () => void,
   ): void {
+    // 자동 줍기 — 비용 차감 후 World에 회수 요청
+    panel.querySelector('[data-autopickup]')?.addEventListener('click', () => {
+      const info = autoPickup.getInfo();
+      if (info.remainingCount <= 0) return;
+      const cost = autoPickupCost(run);
+      if (run.credits < cost) return;
+      run.credits -= cost;
+      autoPickup.collect();
+      onChange();
+    });
     // 소켓 박힌 서포트 옵션 ±
     panel.querySelectorAll('button[data-sup-socket]').forEach((btn) => {
       btn.addEventListener('click', () => {

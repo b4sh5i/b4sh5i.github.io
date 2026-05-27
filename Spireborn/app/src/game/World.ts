@@ -146,6 +146,7 @@ export class World {
   // 층 시작 — 새 시드, 스폰 초기화 (이어하기 시에는 시드 유지)
   startFloor(): void {
     this.run.floorElapsedSec = 0;
+    this.run.floorCreditsEarned = 0;
     this.run.phase = 'fighting';
     this.floorSpec = specForFloor(this.run.floor);
     this.arenaR = arenaRadius(this.run.floor);
@@ -875,6 +876,7 @@ export class World {
     });
     // 5) 클리어 보너스 + 보스 드랍 + 이벤트
     this.run.credits += this.floorSpec.creditClearBonus;
+    this.run.floorCreditsEarned += this.floorSpec.creditClearBonus;
     this.spawnCreditOrb(bx, by, def.credits);
     this.dropBossSupport();
     this.events.onBossDefeated?.();
@@ -942,6 +944,42 @@ export class World {
     return best;
   }
 
+  // 남은 크레딧 오브의 가치 합 — 자동 줍기 미리보기용
+  remainingOrbValue(): number {
+    const ps = this.build.player;
+    let total = 0;
+    this.creditOrbs.forEachActive((o) => {
+      total += Math.max(1, Math.round(o.value * ps.creditGainMul));
+    });
+    return total;
+  }
+
+  // 활성 오브 수
+  remainingOrbCount(): number {
+    let n = 0;
+    this.creditOrbs.forEachActive(() => {
+      n += 1;
+    });
+    return n;
+  }
+
+  // 남은 모든 크레딧 오브를 즉시 회수. 비용 차감은 호출자 책임.
+  // floorCreditsEarned 에는 누적하지 않는다 (이미 이 층에서 발생한 값이라 비용 계산이 변동하면 안 됨).
+  autoCollectOrbs(): number {
+    const ps = this.build.player;
+    let gained = 0;
+    this.creditOrbs.forEachActive((o) => {
+      const v = Math.max(1, Math.round(o.value * ps.creditGainMul));
+      gained += v;
+      this.creditOrbs.release(o);
+    });
+    if (gained > 0) {
+      this.run.credits += gained;
+      this.spawnText(this.player.x, this.player.y - 22, `+${gained}c`, '#ffd86b', 0.6);
+    }
+    return gained;
+  }
+
   // === 크레딧 오브 ===
   private spawnCreditOrb(x: number, y: number, value: number): void {
     const o = this.creditOrbs.acquire();
@@ -984,6 +1022,7 @@ export class World {
       if (d2 < closeR * closeR) {
         const gained = Math.max(1, Math.round(o.value * ps.creditGainMul));
         this.run.credits += gained;
+        this.run.floorCreditsEarned += gained;
         this.spawnText(this.player.x, this.player.y - 22, `+${gained}c`, '#ffd86b', 0.5);
         this.creditOrbs.release(o);
       }

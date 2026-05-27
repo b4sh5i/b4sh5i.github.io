@@ -117,6 +117,7 @@ export class Game {
       killsTotal: 0,
       timeAliveSec: 0,
       floorElapsedSec: 0,
+      floorCreditsEarned: 0,
     };
     this.loadIntoWorld(run);
   }
@@ -155,6 +156,13 @@ export class Game {
     this.overlay.showMaintenance({
       run: w.run,
       itemRewards: this.currentItemRewards,
+      autoPickup: {
+        getInfo: () => ({
+          remainingValue: w.remainingOrbValue(),
+          remainingCount: w.remainingOrbCount(),
+        }),
+        collect: () => w.autoCollectOrbs(),
+      },
       onChange: () => {
         w.rebuild();
         w.run.playerHp = Math.min(w.run.playerHp, w.build.player.maxHp);
