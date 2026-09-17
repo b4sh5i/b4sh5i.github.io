@@ -1,3 +1,9 @@
+---
+layout: default
+title: Profile
+permalink: /profile/
+---
+
 # Profile
 - Kanghyun Choi (@ b4sh5i)
 - Email : pwner@kakao.com / kb4sh5i.choi@samsung.com
